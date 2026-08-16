@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { mutate } from 'swr'
 import { StatCard } from '@/components/ui/stat-card'
 import { SpendingPie } from '@/components/charts/spending-pie'
 import { CashflowBar } from '@/components/charts/cashflow-bar'
@@ -10,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Plus, LogOut } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
+import { currentMonthKey } from '@/lib/data'
 
 interface Props {
   monthLabel: string
@@ -22,7 +23,6 @@ interface Props {
   savingsRate: number
   spendingByCategory: { category: string; amount: number; bucket: string; color: string }[]
   cashflowData: { month: string; income: number; expenses: number; savings: number }[]
-  userId: string
 }
 
 export function DashboardClient({
@@ -37,12 +37,18 @@ export function DashboardClient({
   cashflowData,
 }: Props) {
   const [addOpen, setAddOpen] = useState(false)
-  const router = useRouter()
   const supabase = createClient()
 
   async function handleSignOut() {
     await supabase.auth.signOut()
     window.location.href = '/login'
+  }
+
+  function handleTransactionAdded() {
+    setAddOpen(false)
+    const mk = currentMonthKey()
+    mutate(['txns', mk])
+    mutate('cashflow')
   }
 
   return (
@@ -104,7 +110,7 @@ export function DashboardClient({
 
       {/* Add transaction modal */}
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add transaction">
-        <TransactionForm onSuccess={() => { setAddOpen(false); router.refresh() }} />
+        <TransactionForm onSuccess={handleTransactionAdded} />
       </Modal>
     </div>
   )
