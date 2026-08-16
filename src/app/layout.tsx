@@ -1,0 +1,33 @@
+import type { Metadata, Viewport } from 'next'
+import { Geist } from 'next/font/google'
+import './globals.css'
+
+const geist = Geist({ subsets: ['latin'] })
+
+export const metadata: Metadata = {
+  title: 'Fine Ants',
+  description: 'Personal finance tracker',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Fine Ants',
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#ffffff',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+}
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en" className="h-full antialiased">
+      <body className={`${geist.className} bg-zinc-50 dark:bg-zinc-950 min-h-screen`}>
+        {children}
+      </body>
+    </html>
+  )
+}

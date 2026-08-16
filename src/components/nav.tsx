@@ -1,0 +1,43 @@
+'use client'
+
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { LayoutDashboard, ArrowLeftRight, Receipt, TrendingUp, Target } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+const links = [
+  { href: '/', label: 'Home', icon: LayoutDashboard },
+  { href: '/transactions', label: 'Txns', icon: ArrowLeftRight },
+  { href: '/bills', label: 'Bills', icon: Receipt },
+  { href: '/net-worth', label: 'Worth', icon: TrendingUp },
+  { href: '/goals', label: 'Goals', icon: Target },
+]
+
+export function Nav() {
+  const pathname = usePathname()
+
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-zinc-900 border-t border-zinc-100 dark:border-zinc-800 safe-area-inset-bottom">
+      <div className="max-w-lg mx-auto flex">
+        {links.map(({ href, label, icon: Icon }) => {
+          const active = pathname === href
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                'flex-1 flex flex-col items-center gap-0.5 py-3 text-[10px] font-medium transition-colors',
+                active
+                  ? 'text-zinc-900 dark:text-zinc-100'
+                  : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'
+              )}
+            >
+              <Icon size={20} strokeWidth={active ? 2.5 : 1.8} />
+              {label}
+            </Link>
+          )
+        })}
+      </div>
+    </nav>
+  )
+}
