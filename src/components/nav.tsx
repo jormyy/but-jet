@@ -18,8 +18,8 @@ export function Nav() {
   const pathname = usePathname()
 
   return (
-    <nav className="fixed bottom-4 left-4 right-4 z-40 pb-safe">
-      <div className="max-w-lg mx-auto flex bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-lg shadow-black/10 overflow-hidden">
+    <nav className="fixed bottom-6 left-4 right-4 z-40 pb-safe">
+      <div className="max-w-lg mx-auto flex bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-full shadow-lg shadow-black/10 overflow-hidden">
         {links.map(({ href, label, icon: Icon }) => {
           const active = pathname === href
           return (
@@ -33,7 +33,7 @@ export function Nav() {
                   : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'
               )}
             >
-              <Icon size={20} strokeWidth={active ? 2.5 : 1.8} />
+              <Icon size={20} strokeWidth={active ? 2.5 : 1.75} />
               {label}
             </Link>
           )
