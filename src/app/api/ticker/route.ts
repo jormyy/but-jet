@@ -4,19 +4,22 @@ export async function GET(req: NextRequest) {
   const symbol = req.nextUrl.searchParams.get('symbol')
   if (!symbol) return NextResponse.json({ error: 'Missing symbol' }, { status: 400 })
 
-  const key = process.env.FINNHUB_API_KEY
-  if (!key) return NextResponse.json({ error: 'No API key configured' }, { status: 503 })
+  const upper = symbol.toUpperCase()
+  const res = await fetch(
+    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(upper)}?interval=1d&range=1d`,
+    { headers: { 'User-Agent': 'Mozilla/5.0' } }
+  )
 
-  const [profileRes, quoteRes] = await Promise.all([
-    fetch(`https://finnhub.io/api/v1/stock/profile2?symbol=${encodeURIComponent(symbol.toUpperCase())}&token=${key}`),
-    fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol.toUpperCase())}&token=${key}`),
-  ])
-  const [profile, quote] = await Promise.all([profileRes.json(), quoteRes.json()])
+  if (!res.ok) return NextResponse.json({ error: 'Ticker not found' }, { status: 404 })
 
-  const price: number | null = quote.c && quote.c !== 0 ? quote.c : null
-  const name: string = profile.name || symbol.toUpperCase()
+  const json = await res.json()
+  const meta = json?.chart?.result?.[0]?.meta
+  if (!meta) return NextResponse.json({ error: 'Ticker not found' }, { status: 404 })
 
-  if (!price && !profile.name) return NextResponse.json({ error: 'Ticker not found' }, { status: 404 })
+  const price: number | null = meta.regularMarketPrice ?? null
+  const name: string = meta.shortName || meta.longName || upper
 
-  return NextResponse.json({ name, ticker: profile.ticker || symbol.toUpperCase(), price })
+  if (!price) return NextResponse.json({ error: 'Price unavailable' }, { status: 404 })
+
+  return NextResponse.json({ name, ticker: upper, price })
 }

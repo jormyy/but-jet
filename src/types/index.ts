@@ -73,6 +73,7 @@ export interface InvestmentHolding {
   name: string
   ticker: string | null
   shares: number | null
+  last_price: number | null
   category: InvestmentCategory
   current_value: number
   value_date: string

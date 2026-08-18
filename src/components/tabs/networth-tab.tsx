@@ -75,6 +75,7 @@ export function NetWorthTab() {
     mutate('snapshots')
   }
 
+  const portfolioTotal = holdings.reduce((s, h) => s + h.current_value, 0)
   const latest = snapshots[snapshots.length - 1]
   const chartData = snapshots.map(s => ({
     date: new Date(s.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
@@ -96,13 +97,15 @@ export function NetWorthTab() {
         </Button>
       </div>
 
-      {latest && (
+      {(portfolioTotal > 0 || latest) && (
         <div className="rounded-xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
-          <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Current net worth</p>
-          <p className={`text-3xl font-semibold tabular-nums mt-1 ${latest.total >= 0 ? 'text-zinc-900 dark:text-zinc-100' : 'text-red-500'}`}>
-            {formatCurrency(latest.total)}
+          <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Total portfolio</p>
+          <p className={`text-3xl font-semibold tabular-nums mt-1 ${portfolioTotal >= 0 ? 'text-zinc-900 dark:text-zinc-100' : 'text-red-500'}`}>
+            {formatCurrency(portfolioTotal > 0 ? portfolioTotal : (latest?.total ?? 0))}
           </p>
-          <p className="text-xs text-zinc-400 mt-0.5">As of {formatDate(latest.date)}</p>
+          <p className="text-xs text-zinc-400 mt-0.5">
+            {portfolioTotal > 0 ? 'Live from investments' : latest ? `As of ${formatDate(latest.date)}` : ''}
+          </p>
         </div>
       )}
 

@@ -61,6 +61,7 @@ export function InvestmentsTab() {
   // Refresh state
   const [refreshing, setRefreshing] = useState(false)
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
+  const [refreshFailed, setRefreshFailed] = useState<string[]>([])
 
   // Sync to net worth modal state
   const [syncOpen, setSyncOpen] = useState(false)
@@ -85,8 +86,10 @@ export function InvestmentsTab() {
     const shares = form.shares ? parseFloat(form.shares) : null
 
     let currentValue: number
+    let lastPrice: number | null = null
     if (ticker && shares && tickerInfo?.price) {
-      currentValue = shares * tickerInfo.price
+      lastPrice = tickerInfo.price
+      currentValue = Math.round(shares * lastPrice * 100) / 100
     } else {
       currentValue = parseFloat(form.current_value)
     }
@@ -98,6 +101,7 @@ export function InvestmentsTab() {
       name: displayName,
       ticker,
       shares,
+      last_price: lastPrice,
       category: form.category,
       current_value: currentValue,
       value_date: localDateString(),
@@ -113,25 +117,29 @@ export function InvestmentsTab() {
   async function handleRefreshPrices() {
     if (tickerHoldings.length === 0) return
     setRefreshing(true)
+    setRefreshFailed([])
 
     const quotes = await Promise.all(
-      tickerHoldings.map(h => fetchQuote(h.ticker!).then(q => ({ id: h.id, shares: h.shares!, quote: q })))
+      tickerHoldings.map(h => fetchQuote(h.ticker!).then(q => ({ id: h.id, ticker: h.ticker!, shares: h.shares!, quote: q })))
     )
+
+    const failed = quotes.filter(q => q.quote === null).map(q => q.ticker)
+    const succeeded = quotes.filter(q => q.quote !== null)
 
     const today = localDateString()
     await Promise.all(
-      quotes
-        .filter(q => q.quote !== null)
-        .map(({ id, shares, quote }) =>
-          supabase.from('investment_holdings').update({
-            current_value: shares * quote!.price,
-            value_date: today,
-          }).eq('id', id)
-        )
+      succeeded.map(({ id, shares, quote }) =>
+        supabase.from('investment_holdings').update({
+          last_price: quote!.price,
+          current_value: Math.round(shares * quote!.price * 100) / 100,
+          value_date: today,
+        }).eq('id', id)
+      )
     )
 
     setRefreshing(false)
     setLastRefreshed(new Date())
+    setRefreshFailed(failed)
     mutate('investments')
   }
 
@@ -227,6 +235,11 @@ export function InvestmentsTab() {
               Prices updated {lastRefreshed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </p>
           )}
+          {refreshFailed.length > 0 && (
+            <p className="text-xs text-amber-500 mt-0.5">
+              Could not fetch: {refreshFailed.join(', ')}
+            </p>
+          )}
           <button
             onClick={() => setSyncOpen(true)}
             className="mt-2 flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
@@ -243,7 +256,7 @@ export function InvestmentsTab() {
         <div className="space-y-3">
           {holdings.map(holding => {
             const meta = categoryMeta(holding.category)
-            const pricePerShare = holding.shares ? holding.current_value / holding.shares : null
+            const pricePerShare = holding.last_price ?? (holding.shares ? holding.current_value / holding.shares : null)
             return (
               <div key={holding.id} className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-100 dark:border-zinc-800 p-4 group">
                 <div className="flex items-start justify-between mb-2">
