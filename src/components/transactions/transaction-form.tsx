@@ -7,8 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { BUCKET_LABELS, localDateString } from '@/lib/utils'
-
-const COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280']
+import { CATEGORY_COLORS as COLORS } from '@/lib/colors'
 
 interface TransactionFormProps {
   onSuccess: () => void
@@ -221,7 +220,7 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
           </Select>
           <div>
             <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Color</label>
-            <div className="flex gap-2 mt-1.5">
+            <div className="flex flex-wrap gap-2 mt-1.5">
               {COLORS.map(c => (
                 <button
                   key={c}

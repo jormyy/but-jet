@@ -8,8 +8,8 @@ import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Trash2, Pencil } from 'lucide-react'
 import { BUCKET_LABELS } from '@/lib/utils'
+import { CATEGORY_COLORS as COLORS } from '@/lib/colors'
 
-const COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280']
 const BUCKETS = ['bills', 'spending', 'savings'] as Bucket[]
 
 export function CategoryManager() {
@@ -102,7 +102,7 @@ export function CategoryManager() {
                       </Select>
                       <div>
                         <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Color</label>
-                        <div className="flex gap-2 mt-1.5">
+                        <div className="flex flex-wrap gap-2 mt-1.5">
                           {COLORS.map(col => (
                             <button
                               key={col}
@@ -186,7 +186,7 @@ export function CategoryManager() {
         </Select>
         <div>
           <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Color</label>
-          <div className="flex gap-2 mt-1.5">
+          <div className="flex flex-wrap gap-2 mt-1.5">
             {COLORS.map(c => (
               <button
                 key={c}

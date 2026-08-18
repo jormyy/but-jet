@@ -2,12 +2,13 @@
 
 import { Transaction } from '@/types'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Pencil } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useState, useRef, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 
 const DELETE_WIDTH = 72
+const EDIT_WIDTH = 72
 const SWIPE_THRESHOLD = 30
 
 interface TransactionListProps {
@@ -26,25 +27,23 @@ function SwipeableRow({
   onEdit: (t: Transaction) => void
 }) {
   const [offset, setOffset] = useState(0)
-  const [isOpen, setIsOpen] = useState(false)
   const [dragging, setDragging] = useState(false)
   const startXRef = useRef(0)
   const baseOffsetRef = useRef(0)
 
   const close = useCallback(() => {
     setOffset(0)
-    setIsOpen(false)
   }, [])
 
   function handleTouchStart(e: React.TouchEvent) {
     startXRef.current = e.touches[0].clientX
-    baseOffsetRef.current = isOpen ? DELETE_WIDTH : 0
+    baseOffsetRef.current = offset
     setDragging(true)
   }
 
   function handleTouchMove(e: React.TouchEvent) {
     const dx = startXRef.current - e.touches[0].clientX
-    const next = Math.max(0, Math.min(DELETE_WIDTH, baseOffsetRef.current + dx))
+    const next = Math.max(-EDIT_WIDTH, Math.min(DELETE_WIDTH, baseOffsetRef.current + dx))
     setOffset(next)
   }
 
@@ -52,36 +51,50 @@ function SwipeableRow({
     setDragging(false)
     const isTap = offset === baseOffsetRef.current
 
-    if (isOpen) {
-      if (isTap) {
-        // tapped while open — close it
-        setOffset(0)
-        setIsOpen(false)
-        return
-      }
-      if (offset < DELETE_WIDTH - SWIPE_THRESHOLD) {
-        setOffset(0)
-        setIsOpen(false)
-      } else {
-        setOffset(DELETE_WIDTH)
-      }
-    } else {
-      if (isTap) {
+    if (isTap) {
+      if (offset === 0) {
         onEdit(t)
-        return
-      }
-      if (offset > SWIPE_THRESHOLD) {
-        setOffset(DELETE_WIDTH)
-        setIsOpen(true)
       } else {
-        setOffset(0)
+        close()
       }
+      return
+    }
+
+    if (baseOffsetRef.current > 0) {
+      // was open on the delete side
+      setOffset(offset < DELETE_WIDTH - SWIPE_THRESHOLD ? 0 : DELETE_WIDTH)
+    } else if (baseOffsetRef.current < 0) {
+      // was open on the edit side
+      setOffset(offset > -(EDIT_WIDTH - SWIPE_THRESHOLD) ? 0 : -EDIT_WIDTH)
+    } else if (offset > SWIPE_THRESHOLD) {
+      setOffset(DELETE_WIDTH)
+    } else if (offset < -SWIPE_THRESHOLD) {
+      setOffset(-EDIT_WIDTH)
+    } else {
+      setOffset(0)
     }
   }
 
   return (
     <div className="relative overflow-hidden">
-      {/* Delete action revealed on swipe */}
+      {/* Edit action revealed on swipe right */}
+      <div
+        className="absolute left-0 top-0 bottom-0 flex items-center justify-center bg-blue-500"
+        style={{ width: EDIT_WIDTH }}
+      >
+        <button
+          className="flex flex-col items-center gap-0.5 text-white px-4 h-full w-full justify-center"
+          onClick={() => {
+            close()
+            onEdit(t)
+          }}
+        >
+          <Pencil size={18} />
+          <span className="text-xs font-medium">Edit</span>
+        </button>
+      </div>
+
+      {/* Delete action revealed on swipe left */}
       <div
         className="absolute right-0 top-0 bottom-0 flex items-center justify-center bg-red-500"
         style={{ width: DELETE_WIDTH }}
@@ -101,14 +114,14 @@ function SwipeableRow({
       {/* Row content */}
       <div
         className={cn(
-          'flex items-center justify-between px-4 py-3 bg-white dark:bg-zinc-900 group relative',
+          'flex items-center justify-between px-4 py-3 bg-white dark:bg-zinc-900 relative',
           !dragging && 'transition-transform duration-200 ease-out'
         )}
-        style={{ transform: `translateX(-${offset}px)` }}
+        style={{ transform: `translateX(${-offset}px)` }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        onClick={() => { if (!isOpen) onEdit(t) }}
+        onClick={() => { if (offset === 0) onEdit(t) }}
       >
         <div className="flex flex-col min-w-0">
           <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
@@ -119,25 +132,17 @@ function SwipeableRow({
             {t.description && t.merchant ? ` · ${t.description}` : ''}
           </span>
         </div>
-        <div className="flex items-center gap-3 ml-3 shrink-0">
-          <span
-            className={cn(
-              'text-sm font-semibold tabular-nums',
-              t.type === 'income' && 'text-emerald-600 dark:text-emerald-400',
-              t.type === 'expense' && 'text-zinc-900 dark:text-zinc-100',
-              t.type === 'savings' && 'text-blue-600 dark:text-blue-400'
-            )}
-          >
-            {t.type === 'income' ? '+' : t.type === 'savings' ? '→' : '-'}
-            {formatCurrency(t.amount)}
-          </span>
-          <button
-            onClick={() => onDeleteRequest(t)}
-            className="opacity-0 group-hover:opacity-100 p-1 text-zinc-300 hover:text-red-500 transition-all"
-          >
-            <Trash2 size={14} />
-          </button>
-        </div>
+        <span
+          className={cn(
+            'text-sm font-semibold tabular-nums ml-3 shrink-0',
+            t.type === 'income' && 'text-emerald-600 dark:text-emerald-400',
+            t.type === 'expense' && 'text-zinc-900 dark:text-zinc-100',
+            t.type === 'savings' && 'text-blue-600 dark:text-blue-400'
+          )}
+        >
+          {t.type === 'income' ? '+' : t.type === 'savings' ? '→' : '-'}
+          {formatCurrency(t.amount)}
+        </span>
       </div>
     </div>
   )
