@@ -17,8 +17,8 @@ export function Nav() {
   const pathname = usePathname()
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-zinc-900 border-t border-zinc-100 dark:border-zinc-800 safe-area-inset-bottom">
-      <div className="max-w-lg mx-auto flex">
+    <nav className="fixed bottom-4 left-4 right-4 z-40 pb-safe">
+      <div className="max-w-lg mx-auto flex bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-lg shadow-black/10 overflow-hidden">
         {links.map(({ href, label, icon: Icon }) => {
           const active = pathname === href
           return (

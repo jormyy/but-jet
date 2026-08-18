@@ -20,7 +20,7 @@ export default function AppLayout() {
   const pathname = usePathname()
 
   return (
-    <div className="max-w-lg mx-auto pb-24">
+    <div className="max-w-lg mx-auto pb-28">
       {tabs.map(({ path, component: Tab }) => (
         <div key={path} className={pathname === path ? undefined : 'hidden'}>
           <Tab />
