@@ -30,8 +30,8 @@ export function HomeTab() {
 
   const catMap: Record<string, { category: string; amount: number; bucket: string; color: string }> = {}
   for (const t of transactions.filter(t => t.type === 'expense')) {
-    const key = t.category_id ?? '__none__'
     const cat = categories.find(c => c.id === t.category_id)
+    const key = cat?.id ?? '__none__'
     if (!catMap[key]) {
       catMap[key] = {
         category: cat?.name ?? 'Uncategorized',

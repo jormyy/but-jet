@@ -16,6 +16,7 @@ export function TransactionsTab() {
   const supabase = createClient()
   const [addOpen, setAddOpen] = useState(false)
   const [catsOpen, setCatsOpen] = useState(false)
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
   const [monthOffset, setMonthOffset] = useState(0)
 
   const mk = monthKey(monthOffset)
@@ -65,10 +66,23 @@ export function TransactionsTab() {
         </button>
       </div>
 
-      <TransactionList transactions={(transactions ?? []) as Transaction[]} onDelete={refresh} />
+      <TransactionList
+        transactions={(transactions ?? []) as Transaction[]}
+        onDelete={refresh}
+        onEdit={setEditingTransaction}
+      />
 
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add transaction">
         <TransactionForm onSuccess={() => { setAddOpen(false); refresh() }} />
+      </Modal>
+
+      <Modal open={!!editingTransaction} onClose={() => setEditingTransaction(null)} title="Edit transaction">
+        {editingTransaction && (
+          <TransactionForm
+            transaction={editingTransaction}
+            onSuccess={() => { setEditingTransaction(null); refresh() }}
+          />
+        )}
       </Modal>
 
       <Modal open={catsOpen} onClose={() => setCatsOpen(false)} title="Categories">
