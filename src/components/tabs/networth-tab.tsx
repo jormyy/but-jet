@@ -2,9 +2,9 @@
 
 import useSWR, { mutate } from 'swr'
 import { createClient } from '@/lib/supabase/client'
-import { fetchSnapshots } from '@/lib/data'
-import { NetWorthSnapshot } from '@/types'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { fetchSnapshots, fetchInvestments } from '@/lib/data'
+import { NetWorthSnapshot, InvestmentHolding } from '@/types'
+import { formatCurrency, formatDate, localDateString } from '@/lib/utils'
 import { NetWorthLine } from '@/components/charts/networth-line'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
@@ -18,10 +18,12 @@ export function NetWorthTab() {
   const supabase = createClient()
   const { data } = useSWR('snapshots', fetchSnapshots)
   const snapshots = (data ?? []) as NetWorthSnapshot[]
+  const { data: investmentsData } = useSWR('investments', fetchInvestments)
+  const holdings = (investmentsData ?? []) as InvestmentHolding[]
 
   const [addOpen, setAddOpen] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [date, setDate] = useState(localDateString())
   const [assets, setAssets] = useState<AssetEntry[]>([{ name: '', value: '' }])
   const [liabilities, setLiabilities] = useState<AssetEntry[]>([{ name: '', value: '' }])
 
@@ -83,7 +85,12 @@ export function NetWorthTab() {
     <div className="px-4 pt-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Net Worth</h1>
-        <Button onClick={() => setAddOpen(true)} size="sm">
+        <Button onClick={() => {
+          if (holdings.length > 0) {
+            setAssets(holdings.map(h => ({ name: h.name, value: String(h.current_value) })))
+          }
+          setAddOpen(true)
+        }} size="sm">
           <Plus size={14} className="mr-1" />
           Snapshot
         </Button>
