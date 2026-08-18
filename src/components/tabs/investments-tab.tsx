@@ -3,38 +3,16 @@
 import useSWR, { mutate } from 'swr'
 import { createClient } from '@/lib/supabase/client'
 import { fetchInvestments } from '@/lib/data'
-import { InvestmentHolding, InvestmentCategory } from '@/types'
-import { formatCurrency, formatDate, localDateString } from '@/lib/utils'
+import { InvestmentHolding } from '@/types'
+import { formatCurrency, localDateString } from '@/lib/utils'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { InvestmentForm } from '@/components/investments/investment-form'
+import { InvestmentList } from '@/components/investments/investment-list'
+import { fetchQuote } from '@/components/investments/categories'
 import { useState } from 'react'
-import { Plus, Trash2, RefreshCw, TrendingUp } from 'lucide-react'
-
-const CATEGORIES: { value: InvestmentCategory; label: string; color: string }[] = [
-  { value: '401k',      label: '401k',      color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' },
-  { value: 'ira',       label: 'IRA',       color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' },
-  { value: 'roth_ira',  label: 'Roth IRA',  color: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300' },
-  { value: 'brokerage', label: 'Brokerage', color: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' },
-  { value: 'savings',   label: 'Savings',   color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' },
-  { value: 'crypto',    label: 'Crypto',    color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300' },
-  { value: 'other',     label: 'Other',     color: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300' },
-]
-
-function categoryMeta(cat: InvestmentCategory) {
-  return CATEGORIES.find(c => c.value === cat) ?? CATEGORIES[CATEGORIES.length - 1]
-}
-
-async function fetchQuote(symbol: string): Promise<{ name: string; price: number } | null> {
-  try {
-    const res = await fetch(`/api/ticker?symbol=${encodeURIComponent(symbol)}`)
-    if (!res.ok) return null
-    const d = await res.json()
-    return d.price != null ? { name: d.name, price: d.price } : null
-  } catch {
-    return null
-  }
-}
+import { Plus, RefreshCw, TrendingUp } from 'lucide-react'
 
 export function InvestmentsTab() {
   const supabase = createClient()
@@ -44,19 +22,8 @@ export function InvestmentsTab() {
   const total = holdings.reduce((s, h) => s + h.current_value, 0)
   const tickerHoldings = holdings.filter(h => h.ticker && h.shares)
 
-  // Add modal state
   const [addOpen, setAddOpen] = useState(false)
-  const [addLoading, setAddLoading] = useState(false)
-  const [tickerInfo, setTickerInfo] = useState<{ name: string; price: number } | null>(null)
-  const [tickerLoading, setTickerLoading] = useState(false)
-  const [form, setForm] = useState({
-    name: '',
-    ticker: '',
-    category: 'roth_ira' as InvestmentCategory,
-    shares: '',
-    current_value: '',
-    value_date: localDateString(),
-  })
+  const [editingInvestment, setEditingInvestment] = useState<InvestmentHolding | null>(null)
 
   // Refresh state
   const [refreshing, setRefreshing] = useState(false)
@@ -68,49 +35,7 @@ export function InvestmentsTab() {
   const [syncDate, setSyncDate] = useState(localDateString())
   const [syncLoading, setSyncLoading] = useState(false)
 
-  async function lookupTicker(symbol: string) {
-    if (!symbol) { setTickerInfo(null); return }
-    setTickerLoading(true)
-    const result = await fetchQuote(symbol)
-    setTickerInfo(result)
-    setTickerLoading(false)
-  }
-
-  async function handleAdd(e: React.FormEvent) {
-    e.preventDefault()
-    setAddLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    const ticker = form.ticker.toUpperCase() || null
-    const shares = form.shares ? parseFloat(form.shares) : null
-
-    let currentValue: number
-    let lastPrice: number | null = null
-    if (ticker && shares && tickerInfo?.price) {
-      lastPrice = tickerInfo.price
-      currentValue = Math.round(shares * lastPrice * 100) / 100
-    } else {
-      currentValue = parseFloat(form.current_value)
-    }
-
-    const displayName = form.name.trim() || categoryMeta(form.category).label
-
-    await supabase.from('investment_holdings').insert({
-      user_id: user.id,
-      name: displayName,
-      ticker,
-      shares,
-      last_price: lastPrice,
-      category: form.category,
-      current_value: currentValue,
-      value_date: localDateString(),
-    })
-
-    setForm({ name: '', ticker: '', category: 'roth_ira', shares: '', current_value: '', value_date: localDateString() })
-    setTickerInfo(null)
-    setAddLoading(false)
-    setAddOpen(false)
+  function refresh() {
     mutate('investments')
   }
 
@@ -140,22 +65,7 @@ export function InvestmentsTab() {
     setRefreshing(false)
     setLastRefreshed(new Date())
     setRefreshFailed(failed)
-    mutate('investments')
-  }
-
-  async function handleUpdateValue(id: string, value: string) {
-    const num = parseFloat(value)
-    if (isNaN(num)) return
-    await supabase.from('investment_holdings').update({
-      current_value: num,
-      value_date: localDateString(),
-    }).eq('id', id)
-    mutate('investments')
-  }
-
-  async function handleDelete(id: string) {
-    await supabase.from('investment_holdings').delete().eq('id', id)
-    mutate('investments')
+    refresh()
   }
 
   async function handleSync(e: React.FormEvent) {
@@ -201,11 +111,6 @@ export function InvestmentsTab() {
     mutate('snapshots')
   }
 
-  const hasTicker = form.ticker.trim().length > 0
-  const canSubmitAdd = hasTicker
-    ? (!!form.shares && (tickerInfo?.price != null || !!form.current_value))
-    : !!form.current_value
-
   return (
     <div className="px-4 pt-6 space-y-4">
       <div className="flex items-center justify-between">
@@ -250,162 +155,19 @@ export function InvestmentsTab() {
         </div>
       )}
 
-      {holdings.length === 0 ? (
-        <div className="text-center py-12 text-zinc-400 text-sm">No investments yet</div>
-      ) : (
-        <div className="space-y-3">
-          {holdings.map(holding => {
-            const meta = categoryMeta(holding.category)
-            const pricePerShare = holding.last_price ?? (holding.shares ? holding.current_value / holding.shares : null)
-            return (
-              <div key={holding.id} className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-100 dark:border-zinc-800 p-4 group">
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{holding.name}</p>
-                      {holding.ticker && (
-                        <span className="text-xs font-mono text-zinc-400">{holding.ticker}</span>
-                      )}
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${meta.color}`}>
-                        {meta.label}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      {holding.shares && (
-                        <p className="text-xs text-zinc-400">{holding.shares} shares</p>
-                      )}
-                      {pricePerShare && (
-                        <p className="text-xs text-zinc-400">@ {formatCurrency(pricePerShare)}</p>
-                      )}
-                      {!holding.shares && (
-                        <p className="text-xs text-zinc-400">As of {formatDate(holding.value_date)}</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
-                      {formatCurrency(holding.current_value)}
-                    </span>
-                    <button
-                      onClick={() => handleDelete(holding.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-zinc-300 hover:text-red-500 transition-all"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
+      <InvestmentList holdings={holdings} onDelete={refresh} onEdit={setEditingInvestment} />
 
-                {/* Only show manual update input for holdings without ticker+shares */}
-                {!holding.ticker && (
-                  <div className="flex gap-2 mt-3">
-                    <input
-                      type="number"
-                      defaultValue={holding.current_value}
-                      onBlur={e => handleUpdateValue(holding.id, e.target.value)}
-                      className="flex-1 text-xs border border-zinc-200 dark:border-zinc-700 rounded-lg px-2 py-1.5 bg-transparent text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400"
-                      placeholder="Update value"
-                    />
-                    <span className="text-xs text-zinc-400 self-center">update</span>
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
+      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add investment">
+        <InvestmentForm onSuccess={() => { setAddOpen(false); refresh() }} />
+      </Modal>
 
-      {/* Add holding modal */}
-      <Modal open={addOpen} onClose={() => { setAddOpen(false); setTickerInfo(null) }} title="Add investment">
-        <form onSubmit={handleAdd} className="space-y-4">
-          <Input
-            label="Name"
-            id="inv-name"
-            value={form.name}
-            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-            placeholder="e.g. Fidelity (optional)"
+      <Modal open={!!editingInvestment} onClose={() => setEditingInvestment(null)} title="Edit investment">
+        {editingInvestment && (
+          <InvestmentForm
+            investment={editingInvestment}
+            onSuccess={() => { setEditingInvestment(null); refresh() }}
           />
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Category</label>
-            <select
-              value={form.category}
-              onChange={e => setForm(f => ({ ...f, category: e.target.value as InvestmentCategory }))}
-              className="w-full border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400"
-            >
-              {CATEGORIES.map(c => (
-                <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Ticker</label>
-            <input
-              type="text"
-              value={form.ticker}
-              onChange={e => setForm(f => ({ ...f, ticker: e.target.value }))}
-              onBlur={e => lookupTicker(e.target.value)}
-              placeholder="e.g. VOO"
-              className="w-full border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-400 font-mono uppercase"
-            />
-            {tickerLoading && <p className="text-xs text-zinc-400">Looking up...</p>}
-            {tickerInfo && !tickerLoading && (
-              <p className="text-xs text-zinc-500">
-                {tickerInfo.name} · {formatCurrency(tickerInfo.price)}/share
-              </p>
-            )}
-          </div>
-
-          {hasTicker ? (
-            <Input
-              label="Shares"
-              id="inv-shares"
-              type="number"
-              min="0"
-              step="0.000001"
-              value={form.shares}
-              onChange={e => setForm(f => ({ ...f, shares: e.target.value }))}
-              placeholder="e.g. 1.53"
-              required
-            />
-          ) : (
-            <Input
-              label="Current value"
-              id="inv-value"
-              type="number"
-              min="0"
-              step="0.01"
-              value={form.current_value}
-              onChange={e => setForm(f => ({ ...f, current_value: e.target.value }))}
-              placeholder="0.00"
-              required
-            />
-          )}
-
-          {hasTicker && form.shares && tickerInfo?.price && (
-            <p className="text-xs text-zinc-500 -mt-2">
-              ≈ {formatCurrency(parseFloat(form.shares) * tickerInfo.price)} at current price
-            </p>
-          )}
-
-          {hasTicker && form.shares && !tickerInfo?.price && !tickerLoading && (
-            <Input
-              label="Current value (price lookup failed)"
-              id="inv-value-fallback"
-              type="number"
-              min="0"
-              step="0.01"
-              value={form.current_value}
-              onChange={e => setForm(f => ({ ...f, current_value: e.target.value }))}
-              placeholder="0.00"
-              required
-            />
-          )}
-
-          <Button type="submit" disabled={addLoading || !canSubmitAdd} className="w-full">
-            {addLoading ? 'Saving...' : 'Add investment'}
-          </Button>
-        </form>
+        )}
       </Modal>
 
       {/* Sync to net worth modal */}
