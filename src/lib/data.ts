@@ -4,10 +4,12 @@ import { getMonthRange } from '@/lib/utils'
 const supabase = () => createClient()
 
 export async function fetchBills() {
-  const [{ data: bills }, { data: categories }] = await Promise.all([
+  const [{ data: bills, error: billsError }, { data: categories, error: categoriesError }] = await Promise.all([
     supabase().from('recurring_bills').select('*, category:categories(*)').order('next_due_date'),
     supabase().from('categories').select('*').order('bucket').order('name'),
   ])
+  if (billsError) throw billsError
+  if (categoriesError) throw categoriesError
   return { bills: bills ?? [], categories: categories ?? [] }
 }
 
@@ -16,12 +18,13 @@ export async function fetchTransactions(monthKey: string) {
   const [year, month] = monthKey.split('-').map(Number)
   const d = new Date(year, month - 1, 1)
   const { start, end } = getMonthRange(d)
-  const { data } = await supabase()
+  const { data, error } = await supabase()
     .from('transactions')
     .select('*, category:categories(*)')
     .gte('date', start)
     .lte('date', end)
     .order('date', { ascending: false })
+  if (error) throw error
   return data ?? []
 }
 
@@ -45,6 +48,9 @@ export async function fetchCashflow() {
         .lte('date', end)
     )
   )
+  for (const { error } of results) {
+    if (error) throw error
+  }
 
   return months.map(({ label }, i) => {
     const mt = results[i].data ?? []
@@ -58,23 +64,26 @@ export async function fetchCashflow() {
 }
 
 export async function fetchGoals() {
-  const { data } = await supabase().from('goals').select('*').order('created_at')
+  const { data, error } = await supabase().from('goals').select('*').order('created_at')
+  if (error) throw error
   return data ?? []
 }
 
 export async function fetchSnapshots() {
-  const { data } = await supabase()
+  const { data, error } = await supabase()
     .from('net_worth_snapshots')
     .select('*')
     .order('date', { ascending: true })
+  if (error) throw error
   return data ?? []
 }
 
 export async function fetchInvestments() {
-  const { data } = await supabase()
+  const { data, error } = await supabase()
     .from('investment_holdings')
     .select('*')
     .order('created_at')
+  if (error) throw error
   return data ?? []
 }
 
