@@ -4,7 +4,7 @@ import useSWR, { mutate } from 'swr'
 import { createClient } from '@/lib/supabase/client'
 import { fetchBills } from '@/lib/data'
 import { RecurringBill, Category, Bucket } from '@/types'
-import { formatCurrency, monthlyAmount, BUCKET_LABELS } from '@/lib/utils'
+import { formatCurrency, monthlyAmount, BUCKET_LABELS, localDateString } from '@/lib/utils'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,7 +25,7 @@ export function BillsTab() {
     name: '',
     amount: '',
     frequency: 'monthly' as 'monthly' | 'annual' | 'weekly',
-    next_due_date: new Date().toISOString().split('T')[0],
+    next_due_date: localDateString(),
     category_id: '',
   })
 
@@ -42,7 +42,7 @@ export function BillsTab() {
       next_due_date: form.next_due_date,
       category_id: form.category_id || null,
     })
-    setForm({ name: '', amount: '', frequency: 'monthly', next_due_date: new Date().toISOString().split('T')[0], category_id: '' })
+    setForm({ name: '', amount: '', frequency: 'monthly', next_due_date: localDateString(), category_id: '' })
     setLoading(false)
     setAddOpen(false)
     mutate('bills')

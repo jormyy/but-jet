@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, ArrowLeftRight, Receipt, TrendingUp, Target } from 'lucide-react'
+import { LayoutDashboard, ArrowLeftRight, Receipt, TrendingUp, Target, PieChart } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const links = [
@@ -11,6 +11,7 @@ const links = [
   { href: '/bills', label: 'Bills', icon: Receipt },
   { href: '/net-worth', label: 'Worth', icon: TrendingUp },
   { href: '/goals', label: 'Goals', icon: Target },
+  { href: '/investments', label: 'Invest', icon: PieChart },
 ]
 
 export function Nav() {

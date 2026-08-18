@@ -7,6 +7,7 @@ import { BillsTab } from '@/components/tabs/bills-tab'
 import { TransactionsTab } from '@/components/tabs/transactions-tab'
 import { GoalsTab } from '@/components/tabs/goals-tab'
 import { NetWorthTab } from '@/components/tabs/networth-tab'
+import { InvestmentsTab } from '@/components/tabs/investments-tab'
 
 const tabs = [
   { path: '/', component: HomeTab },
@@ -14,6 +15,7 @@ const tabs = [
   { path: '/bills', component: BillsTab },
   { path: '/net-worth', component: NetWorthTab },
   { path: '/goals', component: GoalsTab },
+  { path: '/investments', component: InvestmentsTab },
 ]
 
 export default function AppLayout() {

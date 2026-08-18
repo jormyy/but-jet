@@ -65,6 +65,20 @@ export interface Goal {
   created_at: string
 }
 
+export type InvestmentCategory = '401k' | 'ira' | 'roth_ira' | 'brokerage' | 'savings' | 'crypto' | 'other'
+
+export interface InvestmentHolding {
+  id: string
+  user_id: string
+  name: string
+  ticker: string | null
+  shares: number | null
+  category: InvestmentCategory
+  current_value: number
+  value_date: string
+  created_at: string
+}
+
 export interface DashboardStats {
   incomeThisMonth: number
   expensesThisMonth: number

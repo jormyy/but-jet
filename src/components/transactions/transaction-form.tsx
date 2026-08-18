@@ -6,7 +6,7 @@ import { Category, Transaction, TransactionType, Bucket } from '@/types'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { BUCKET_LABELS } from '@/lib/utils'
+import { BUCKET_LABELS, localDateString } from '@/lib/utils'
 
 const COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280']
 
@@ -28,7 +28,7 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
     merchant: transaction?.merchant ?? '',
     description: transaction?.description ?? '',
     category_id: transaction?.category_id ?? '',
-    date: transaction?.date ?? new Date().toISOString().split('T')[0],
+    date: transaction?.date ?? localDateString(),
   })
 
   // Inline new category form
@@ -119,7 +119,7 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
 
     setLoading(false)
     if (!error) {
-      setForm({ type: 'expense', amount: '', merchant: '', description: '', category_id: '', date: new Date().toISOString().split('T')[0] })
+      setForm({ type: 'expense', amount: '', merchant: '', description: '', category_id: '', date: localDateString() })
       setSuggestedCategoryId('')
       onSuccess()
     }
