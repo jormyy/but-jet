@@ -1,12 +1,15 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { SWRConfig, type Cache } from 'swr'
 
 const STORAGE_KEY = 'fine-ants-swr-cache'
 
-function localStorageProvider(): Cache {
-  if (typeof window === 'undefined') return new Map()
+function emptyCache(): Cache {
+  return new Map()
+}
 
+function localStorageProvider(): Cache {
   let entries: [string, unknown][] = []
   try {
     entries = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]')
@@ -27,5 +30,16 @@ function localStorageProvider(): Cache {
 }
 
 export function SWRProvider({ children }: { children: React.ReactNode }) {
-  return <SWRConfig value={{ provider: localStorageProvider }}>{children}</SWRConfig>
+  // The persisted cache can only be read on the client, so the first client
+  // render must also start empty to match the server — otherwise cached
+  // values from a previous visit would hydrate-mismatch against the server's
+  // empty state. Swap in the real cache right after mount instead.
+  const [hydrated, setHydrated] = useState(false)
+  useEffect(() => setHydrated(true), [])
+
+  return (
+    <SWRConfig key={hydrated ? 'cached' : 'ssr'} value={{ provider: hydrated ? localStorageProvider : emptyCache }}>
+      {children}
+    </SWRConfig>
+  )
 }
