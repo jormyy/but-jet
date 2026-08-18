@@ -8,7 +8,7 @@ import { CashflowBar } from '@/components/charts/cashflow-bar'
 import { Modal } from '@/components/ui/modal'
 import { TransactionForm } from '@/components/transactions/transaction-form'
 import { Button } from '@/components/ui/button'
-import { Plus, LogOut } from 'lucide-react'
+import { Plus, LogOut, Infinity as InfinityIcon } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { currentMonthKey } from '@/lib/data'
@@ -73,10 +73,23 @@ export function DashboardClient({
       {/* Key stats */}
       <div className="grid grid-cols-2 gap-3">
         <StatCard label="Income" value={incomeThisMonth} accent="green" />
-        <StatCard label="Spent" value={expensesThisMonth} accent="red" />
-        <StatCard label="Saved" value={savingsThisMonth} accent="green" sub={`${savingsRate.toFixed(0)}% of income`} />
+        <StatCard label="Spent" value={expensesThisMonth} accent="orange" />
         <StatCard
-          label="Left to spend"
+          label="Saved"
+          value={savingsThisMonth}
+          accent="blue"
+          sub={
+            Number.isFinite(savingsRate) ? (
+              `${savingsRate.toFixed(0)}% of available`
+            ) : (
+              <>
+                <InfinityIcon size={12} strokeWidth={2.5} /> of available
+              </>
+            )
+          }
+        />
+        <StatCard
+          label="Remaining"
           value={remainingSpendable}
           accent={remainingSpendable >= 0 ? 'green' : 'red'}
           sub={committedBills > 0 ? `${formatCurrency(committedBills)}/mo in bills` : undefined}

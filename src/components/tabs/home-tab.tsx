@@ -36,7 +36,7 @@ export function HomeTab() {
   const lastMonthLeftover = lastMonthIncome - lastMonthExpenses - lastMonthSavings
 
   const remainingSpendable = lastMonthLeftover - expensesThisMonth - savingsThisMonth
-  const savingsRate = incomeThisMonth > 0 ? (savingsThisMonth / incomeThisMonth) * 100 : 0
+  const savingsRate = lastMonthLeftover === 0 ? Infinity : (savingsThisMonth / lastMonthLeftover) * 100
 
   const catMap: Record<string, { category: string; amount: number; bucket: string; color: string }> = {}
   for (const t of transactions.filter(t => t.type === 'expense')) {

@@ -4,8 +4,8 @@ import { ReactNode } from 'react'
 interface StatCardProps {
   label: string
   value: number
-  sub?: string
-  accent?: 'green' | 'red' | 'default'
+  sub?: ReactNode
+  accent?: 'green' | 'red' | 'orange' | 'blue' | 'default'
   icon?: ReactNode
 }
 
@@ -21,12 +21,14 @@ export function StatCard({ label, value, sub, accent = 'default', icon }: StatCa
           'text-2xl font-semibold tabular-nums',
           accent === 'green' && 'text-emerald-600 dark:text-emerald-400',
           accent === 'red' && 'text-red-500',
+          accent === 'orange' && 'text-orange-500',
+          accent === 'blue' && 'text-blue-500',
           accent === 'default' && 'text-zinc-900 dark:text-zinc-100'
         )}
       >
         {formatCurrency(value)}
       </span>
-      {sub && <span className="text-xs text-zinc-400">{sub}</span>}
+      {sub && <span className="text-xs text-zinc-400 inline-flex items-center gap-0.5">{sub}</span>}
     </div>
   )
 }

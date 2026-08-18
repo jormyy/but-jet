@@ -9,9 +9,9 @@ const links = [
   { href: '/', label: 'Home', icon: LayoutDashboard },
   { href: '/transactions', label: 'Txns', icon: ArrowLeftRight },
   { href: '/bills', label: 'Bills', icon: Receipt },
+  { href: '/investments', label: 'Invest', icon: PieChart },
   { href: '/net-worth', label: 'Worth', icon: TrendingUp },
   { href: '/goals', label: 'Goals', icon: Target },
-  { href: '/investments', label: 'Invest', icon: PieChart },
 ]
 
 export function Nav() {
