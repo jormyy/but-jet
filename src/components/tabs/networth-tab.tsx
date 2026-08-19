@@ -6,6 +6,7 @@ import { fetchSnapshots, fetchInvestments } from '@/lib/data'
 import { NetWorthSnapshot, InvestmentHolding } from '@/types'
 import { formatCurrency, formatDate, localDateString } from '@/lib/utils'
 import { NetWorthLine } from '@/components/charts/networth-line'
+import { StatCard } from '@/components/ui/stat-card'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,6 +14,20 @@ import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 
 interface AssetEntry { name: string; value: string }
+
+const RANGES = ['1M', 'YTD', '1Y', '3Y', 'All'] as const
+type Range = typeof RANGES[number]
+
+function rangeCutoff(range: Range): Date | null {
+  const now = new Date()
+  switch (range) {
+    case '1M': return new Date(now.getFullYear(), now.getMonth() - 1, now.getDate())
+    case 'YTD': return new Date(now.getFullYear(), 0, 1)
+    case '1Y': return new Date(now.getFullYear() - 1, now.getMonth(), now.getDate())
+    case '3Y': return new Date(now.getFullYear() - 3, now.getMonth(), now.getDate())
+    case 'All': return null
+  }
+}
 
 export function NetWorthTab() {
   const supabase = createClient()
@@ -26,6 +41,7 @@ export function NetWorthTab() {
   const [date, setDate] = useState(localDateString())
   const [assets, setAssets] = useState<AssetEntry[]>([{ name: '', value: '' }])
   const [liabilities, setLiabilities] = useState<AssetEntry[]>([{ name: '', value: '' }])
+  const [range, setRange] = useState<Range>('1M')
 
   function addRow(setter: typeof setAssets) {
     setter(rows => [...rows, { name: '', value: '' }])
@@ -48,6 +64,9 @@ export function NetWorthTab() {
     const assetsMap: Record<string, number> = {}
     for (const a of assets.filter(a => a.name && a.value)) {
       assetsMap[a.name] = parseFloat(a.value)
+    }
+    if (portfolioTotal > 0) {
+      assetsMap['Investments'] = portfolioTotal
     }
     const liabMap: Record<string, number> = {}
     for (const l of liabilities.filter(l => l.name && l.value)) {
@@ -77,8 +96,10 @@ export function NetWorthTab() {
 
   const portfolioTotal = holdings.reduce((s, h) => s + h.current_value, 0)
   const latest = snapshots[snapshots.length - 1]
-  const chartData = snapshots.map(s => ({
-    date: new Date(s.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+  const cutoff = rangeCutoff(range)
+  const rangedSnapshots = cutoff ? snapshots.filter(s => new Date(s.date + 'T00:00:00') >= cutoff) : snapshots
+  const chartData = rangedSnapshots.map(s => ({
+    date: new Date(s.date + 'T00:00:00').toLocaleDateString('en-US', range === '1M' ? { month: 'short', day: 'numeric' } : { month: 'short', year: '2-digit' }),
     total: s.total,
   }))
 
@@ -86,60 +107,62 @@ export function NetWorthTab() {
     <div className="px-4 pt-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Net Worth</h1>
-        <Button onClick={() => {
-          if (holdings.length > 0) {
-            setAssets(holdings.map(h => ({ name: h.name, value: String(h.current_value) })))
-          }
-          setAddOpen(true)
-        }} size="sm">
+        <Button onClick={() => setAddOpen(true)} size="sm">
           <Plus size={14} className="mr-1" />
           Snapshot
         </Button>
       </div>
 
-      {(portfolioTotal > 0 || latest) && (
-        <div className="rounded-xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
-          <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Total portfolio</p>
-          <p className={`text-3xl font-semibold tabular-nums mt-1 ${portfolioTotal >= 0 ? 'text-zinc-900 dark:text-zinc-100' : 'text-red-500'}`}>
-            {formatCurrency(portfolioTotal > 0 ? portfolioTotal : (latest?.total ?? 0))}
+      {latest && (
+        <div className="rounded-xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 group">
+          <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Net worth</p>
+          <p className={`text-3xl font-semibold tabular-nums mt-1 ${latest.total >= 0 ? 'text-zinc-900 dark:text-zinc-100' : 'text-red-500'}`}>
+            {formatCurrency(latest.total)}
           </p>
-          <p className="text-xs text-zinc-400 mt-0.5">
-            {portfolioTotal > 0 ? 'Live from investments' : latest ? `As of ${formatDate(latest.date)}` : ''}
-          </p>
+          <div className="flex items-center justify-between mt-0.5">
+            <p className="text-xs text-zinc-400">As of {formatDate(latest.date)}</p>
+            <button
+              onClick={() => handleDelete(latest.id)}
+              className="opacity-0 group-hover:opacity-100 p-1 -m-1 text-zinc-300 hover:text-red-500 transition-all"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {latest && (Object.keys(latest.assets).length > 0 || Object.keys(latest.liabilities).length > 0) && (
+        <div className="grid grid-cols-2 gap-3">
+          {Object.entries(latest.assets).map(([name, value]) => (
+            <StatCard key={name} label={name} value={value} />
+          ))}
+          {Object.entries(latest.liabilities).map(([name, value]) => (
+            <StatCard key={name} label={name} value={-value} accent="red" />
+          ))}
         </div>
       )}
 
       <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-100 dark:border-zinc-800 p-4">
-        <h2 className="text-sm font-medium text-zinc-900 dark:text-zinc-100 mb-3">History</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">History</h2>
+          <div className="flex gap-0.5">
+            {RANGES.map(r => (
+              <button
+                key={r}
+                onClick={() => setRange(r)}
+                className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+                  range === r
+                    ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
+                    : 'text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                }`}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+        </div>
         <NetWorthLine data={chartData} />
       </div>
-
-      {/* Snapshot list */}
-      {snapshots.length > 0 && (
-        <div className="flex flex-col divide-y divide-zinc-100 dark:divide-zinc-800 rounded-xl border border-zinc-100 dark:border-zinc-800 overflow-hidden">
-          {[...snapshots].reverse().map(s => (
-            <div key={s.id} className="flex items-center justify-between px-4 py-3 bg-white dark:bg-zinc-900 group">
-              <div>
-                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{formatDate(s.date)}</p>
-                <p className="text-xs text-zinc-400">
-                  Assets {formatCurrency(Object.values(s.assets).reduce((a, b) => a + b, 0))} · Liabilities {formatCurrency(Object.values(s.liabilities).reduce((a, b) => a + b, 0))}
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className={`text-sm font-semibold tabular-nums ${s.total >= 0 ? 'text-zinc-900 dark:text-zinc-100' : 'text-red-500'}`}>
-                  {formatCurrency(s.total)}
-                </span>
-                <button
-                  onClick={() => handleDelete(s.id)}
-                  className="opacity-0 group-hover:opacity-100 p-1 text-zinc-300 hover:text-red-500 transition-all"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="New net worth snapshot">
         <form onSubmit={handleSubmit} className="space-y-5">
@@ -153,6 +176,11 @@ export function NetWorthTab() {
 
           <div className="space-y-2">
             <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Assets</p>
+            {portfolioTotal > 0 && (
+              <p className="text-xs text-zinc-400">
+                Investments ({formatCurrency(portfolioTotal)}) added automatically — enter bank accounts etc. below
+              </p>
+            )}
             {assets.map((a, i) => (
               <div key={i} className="flex gap-2">
                 <Input placeholder="Name (e.g. Checking)" value={a.name} onChange={e => updateRow(setAssets, i, 'name', e.target.value)} />

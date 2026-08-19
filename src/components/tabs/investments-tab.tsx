@@ -7,12 +7,11 @@ import { InvestmentHolding } from '@/types'
 import { formatCurrency, localDateString } from '@/lib/utils'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { InvestmentForm } from '@/components/investments/investment-form'
 import { InvestmentList } from '@/components/investments/investment-list'
 import { fetchQuote } from '@/components/investments/categories'
 import { useState } from 'react'
-import { Plus, RefreshCw, TrendingUp } from 'lucide-react'
+import { Plus, RefreshCw } from 'lucide-react'
 
 export function InvestmentsTab() {
   const supabase = createClient()
@@ -29,11 +28,6 @@ export function InvestmentsTab() {
   const [refreshing, setRefreshing] = useState(false)
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
   const [refreshFailed, setRefreshFailed] = useState<string[]>([])
-
-  // Sync to net worth modal state
-  const [syncOpen, setSyncOpen] = useState(false)
-  const [syncDate, setSyncDate] = useState(localDateString())
-  const [syncLoading, setSyncLoading] = useState(false)
 
   function refresh() {
     mutate('investments')
@@ -66,49 +60,6 @@ export function InvestmentsTab() {
     setLastRefreshed(new Date())
     setRefreshFailed(failed)
     refresh()
-  }
-
-  async function handleSync(e: React.FormEvent) {
-    e.preventDefault()
-    if (holdings.length === 0) return
-    setSyncLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    const assetsFromHoldings: Record<string, number> = {}
-    for (const h of holdings) {
-      assetsFromHoldings[h.name] = h.current_value
-    }
-    const holdingsTotal = Object.values(assetsFromHoldings).reduce((s, v) => s + v, 0)
-
-    const { data: existing } = await supabase
-      .from('net_worth_snapshots')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('date', syncDate)
-      .maybeSingle()
-
-    if (existing) {
-      const mergedAssets = { ...existing.assets, ...assetsFromHoldings }
-      const totalAssets = (Object.values(mergedAssets) as number[]).reduce((s, v) => s + v, 0)
-      const totalLiab = (Object.values(existing.liabilities as Record<string, number>) as number[]).reduce((s, v) => s + v, 0)
-      await supabase.from('net_worth_snapshots').update({
-        assets: mergedAssets,
-        total: totalAssets - totalLiab,
-      }).eq('id', existing.id)
-    } else {
-      await supabase.from('net_worth_snapshots').insert({
-        user_id: user.id,
-        date: syncDate,
-        assets: assetsFromHoldings,
-        liabilities: {},
-        total: holdingsTotal,
-      })
-    }
-
-    setSyncLoading(false)
-    setSyncOpen(false)
-    mutate('snapshots')
   }
 
   return (
@@ -145,13 +96,6 @@ export function InvestmentsTab() {
               Could not fetch: {refreshFailed.join(', ')}
             </p>
           )}
-          <button
-            onClick={() => setSyncOpen(true)}
-            className="mt-2 flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
-          >
-            <TrendingUp size={12} />
-            Sync to Net Worth
-          </button>
         </div>
       )}
 
@@ -168,36 +112,6 @@ export function InvestmentsTab() {
             onSuccess={() => { setEditingInvestment(null); refresh() }}
           />
         )}
-      </Modal>
-
-      {/* Sync to net worth modal */}
-      <Modal open={syncOpen} onClose={() => setSyncOpen(false)} title="Sync to Net Worth">
-        <form onSubmit={handleSync} className="space-y-4">
-          <p className="text-sm text-zinc-500">
-            Creates or updates a net worth snapshot with your {holdings.length} holding{holdings.length !== 1 ? 's' : ''} ({formatCurrency(total)} total).
-          </p>
-
-          <Input
-            label="Snapshot date"
-            id="sync-date"
-            type="date"
-            value={syncDate}
-            onChange={e => setSyncDate(e.target.value)}
-          />
-
-          <div className="space-y-1">
-            {holdings.map(h => (
-              <div key={h.id} className="flex justify-between text-xs text-zinc-500">
-                <span>{h.name}</span>
-                <span className="tabular-nums">{formatCurrency(h.current_value)}</span>
-              </div>
-            ))}
-          </div>
-
-          <Button type="submit" disabled={syncLoading} className="w-full">
-            {syncLoading ? 'Syncing...' : 'Save to Net Worth'}
-          </Button>
-        </form>
       </Modal>
     </div>
   )
