@@ -6,14 +6,16 @@ import { fetchSnapshots, fetchInvestments } from '@/lib/data'
 import { NetWorthSnapshot, InvestmentHolding } from '@/types'
 import { formatCurrency, formatDate, localDateString } from '@/lib/utils'
 import { NetWorthLine } from '@/components/charts/networth-line'
-import { StatCard } from '@/components/ui/stat-card'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { SwipeableRow } from '@/components/ui/swipeable-row'
+import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog'
 import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 
 interface AssetEntry { name: string; value: string }
+type EntryType = 'asset' | 'liability'
 
 const RANGES = ['1M', 'YTD', '1Y', '3Y', 'All'] as const
 type Range = typeof RANGES[number]
@@ -42,6 +44,12 @@ export function NetWorthTab() {
   const [assets, setAssets] = useState<AssetEntry[]>([{ name: '', value: '' }])
   const [liabilities, setLiabilities] = useState<AssetEntry[]>([{ name: '', value: '' }])
   const [range, setRange] = useState<Range>('1M')
+
+  const [editingEntry, setEditingEntry] = useState<{ type: EntryType; name: string } | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editValue, setEditValue] = useState('')
+  const [confirmEntry, setConfirmEntry] = useState<{ type: EntryType; name: string; value: number } | null>(null)
+  const [entryLoading, setEntryLoading] = useState(false)
 
   function addRow(setter: typeof setAssets) {
     setter(rows => [...rows, { name: '', value: '' }])
@@ -89,8 +97,39 @@ export function NetWorthTab() {
     mutate('snapshots')
   }
 
-  async function handleDelete(id: string) {
-    await supabase.from('net_worth_snapshots').delete().eq('id', id)
+  function openEditEntry(type: EntryType, name: string, value: number) {
+    setEditingEntry({ type, name })
+    setEditName(name)
+    setEditValue(String(value))
+  }
+
+  async function handleSaveEntry(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingEntry || !latest) return
+    setEntryLoading(true)
+    const assetsMap = { ...latest.assets }
+    const liabMap = { ...latest.liabilities }
+    const targetMap = editingEntry.type === 'asset' ? assetsMap : liabMap
+    delete targetMap[editingEntry.name]
+    targetMap[editName] = parseFloat(editValue)
+    const total = Object.values(assetsMap).reduce((s, v) => s + v, 0) - Object.values(liabMap).reduce((s, v) => s + v, 0)
+    await supabase.from('net_worth_snapshots').update({ assets: assetsMap, liabilities: liabMap, total }).eq('id', latest.id)
+    setEntryLoading(false)
+    setEditingEntry(null)
+    mutate('snapshots')
+  }
+
+  async function handleDeleteEntry() {
+    if (!confirmEntry || !latest) return
+    setEntryLoading(true)
+    const assetsMap = { ...latest.assets }
+    const liabMap = { ...latest.liabilities }
+    const targetMap = confirmEntry.type === 'asset' ? assetsMap : liabMap
+    delete targetMap[confirmEntry.name]
+    const total = Object.values(assetsMap).reduce((s, v) => s + v, 0) - Object.values(liabMap).reduce((s, v) => s + v, 0)
+    await supabase.from('net_worth_snapshots').update({ assets: assetsMap, liabilities: liabMap, total }).eq('id', latest.id)
+    setEntryLoading(false)
+    setConfirmEntry(null)
     mutate('snapshots')
   }
 
@@ -114,31 +153,65 @@ export function NetWorthTab() {
       </div>
 
       {latest && (
-        <div className="rounded-xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 group">
+        <div className="rounded-xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
           <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Net worth</p>
           <p className={`text-3xl font-semibold tabular-nums mt-1 ${latest.total >= 0 ? 'text-zinc-900 dark:text-zinc-100' : 'text-red-500'}`}>
             {formatCurrency(latest.total)}
           </p>
-          <div className="flex items-center justify-between mt-0.5">
-            <p className="text-xs text-zinc-400">As of {formatDate(latest.date)}</p>
-            <button
-              onClick={() => handleDelete(latest.id)}
-              className="opacity-0 group-hover:opacity-100 p-1 -m-1 text-zinc-300 hover:text-red-500 transition-all"
-            >
-              <Trash2 size={14} />
-            </button>
+          <p className="text-xs text-zinc-400 mt-0.5">As of {formatDate(latest.date)}</p>
+        </div>
+      )}
+
+      {latest && Object.keys(latest.assets).length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2 px-1">Assets</p>
+          <div className="flex flex-col divide-y divide-zinc-100 dark:divide-zinc-800 rounded-xl border border-zinc-100 dark:border-zinc-800 overflow-hidden">
+            {Object.entries(latest.assets).map(([name, value]) => (
+              name === 'Investments' ? (
+                <div key={name} className="flex items-center justify-between px-4 py-3 bg-white dark:bg-zinc-900">
+                  <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{name}</span>
+                  <span className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
+                    {formatCurrency(value)}
+                  </span>
+                </div>
+              ) : (
+                <SwipeableRow
+                  key={name}
+                  onEdit={() => openEditEntry('asset', name, value)}
+                  onDelete={() => setConfirmEntry({ type: 'asset', name, value })}
+                >
+                  <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-zinc-900">
+                    <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{name}</span>
+                    <span className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
+                      {formatCurrency(value)}
+                    </span>
+                  </div>
+                </SwipeableRow>
+              )
+            ))}
           </div>
         </div>
       )}
 
-      {latest && (Object.keys(latest.assets).length > 0 || Object.keys(latest.liabilities).length > 0) && (
-        <div className="grid grid-cols-2 gap-3">
-          {Object.entries(latest.assets).map(([name, value]) => (
-            <StatCard key={name} label={name} value={value} />
-          ))}
-          {Object.entries(latest.liabilities).map(([name, value]) => (
-            <StatCard key={name} label={name} value={-value} accent="red" />
-          ))}
+      {latest && Object.keys(latest.liabilities).length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2 px-1">Liabilities</p>
+          <div className="flex flex-col divide-y divide-zinc-100 dark:divide-zinc-800 rounded-xl border border-zinc-100 dark:border-zinc-800 overflow-hidden">
+            {Object.entries(latest.liabilities).map(([name, value]) => (
+              <SwipeableRow
+                key={name}
+                onEdit={() => openEditEntry('liability', name, value)}
+                onDelete={() => setConfirmEntry({ type: 'liability', name, value })}
+              >
+                <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-zinc-900">
+                  <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{name}</span>
+                  <span className="text-sm font-semibold tabular-nums text-red-500">
+                    {formatCurrency(-value)}
+                  </span>
+                </div>
+              </SwipeableRow>
+            ))}
+          </div>
         </div>
       )}
 
@@ -220,6 +293,39 @@ export function NetWorthTab() {
           </Button>
         </form>
       </Modal>
+
+      <Modal open={!!editingEntry} onClose={() => setEditingEntry(null)} title={editingEntry?.type === 'liability' ? 'Edit liability' : 'Edit asset'}>
+        <form onSubmit={handleSaveEntry} className="space-y-4">
+          <Input
+            label="Name"
+            id="entry-name"
+            value={editName}
+            onChange={e => setEditName(e.target.value)}
+            required
+          />
+          <Input
+            label="Value"
+            id="entry-value"
+            type="number"
+            step="0.01"
+            value={editValue}
+            onChange={e => setEditValue(e.target.value)}
+            required
+          />
+          <Button type="submit" disabled={entryLoading} className="w-full">
+            {entryLoading ? 'Saving...' : 'Save'}
+          </Button>
+        </form>
+      </Modal>
+
+      <ConfirmDeleteDialog
+        open={!!confirmEntry}
+        title={confirmEntry?.type === 'liability' ? 'Delete liability?' : 'Delete asset?'}
+        description={`${confirmEntry?.name ?? ''} · ${confirmEntry ? formatCurrency(confirmEntry.value) : ''}`}
+        loading={entryLoading}
+        onCancel={() => setConfirmEntry(null)}
+        onConfirm={handleDeleteEntry}
+      />
     </div>
   )
 }

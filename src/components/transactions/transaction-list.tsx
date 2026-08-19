@@ -1,8 +1,9 @@
 'use client'
 
 import { Transaction } from '@/types'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate, transactionDelta } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
+import { adjustCheckingBalance } from '@/lib/data'
 import { useState } from 'react'
 import { SwipeableRow } from '@/components/ui/swipeable-row'
 import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog'
@@ -22,7 +23,10 @@ export function TransactionList({ transactions, onDelete, onEdit }: TransactionL
   async function handleConfirmDelete() {
     if (!confirmTarget) return
     setDeleting(true)
-    await supabase.from('transactions').delete().eq('id', confirmTarget.id)
+    const { error } = await supabase.from('transactions').delete().eq('id', confirmTarget.id)
+    if (!error) {
+      await adjustCheckingBalance(-transactionDelta(confirmTarget.type, confirmTarget.amount))
+    }
     setDeleting(false)
     setConfirmTarget(null)
     onDelete()

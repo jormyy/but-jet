@@ -6,8 +6,9 @@ import { Category, Transaction, TransactionType, Bucket } from '@/types'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { BUCKET_LABELS, localDateString } from '@/lib/utils'
+import { BUCKET_LABELS, localDateString, transactionDelta } from '@/lib/utils'
 import { CATEGORY_COLORS as COLORS } from '@/lib/colors'
+import { adjustCheckingBalance } from '@/lib/data'
 
 interface TransactionFormProps {
   onSuccess: () => void
@@ -98,6 +99,11 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
 
     if (isEdit) {
       const { error } = await supabase.from('transactions').update(payload).eq('id', transaction.id)
+      if (!error) {
+        const oldDelta = transactionDelta(transaction.type, transaction.amount)
+        const newDelta = transactionDelta(payload.type, payload.amount)
+        await adjustCheckingBalance(newDelta - oldDelta)
+      }
       setLoading(false)
       if (!error) onSuccess()
       return
@@ -107,6 +113,10 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
     if (!user) return
 
     const { error } = await supabase.from('transactions').insert({ user_id: user.id, ...payload })
+
+    if (!error) {
+      await adjustCheckingBalance(transactionDelta(payload.type, payload.amount))
+    }
 
     if (!error && form.merchant && form.category_id) {
       await supabase.from('merchant_categories').upsert({

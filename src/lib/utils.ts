@@ -1,4 +1,5 @@
 import { clsx, type ClassValue } from 'clsx'
+import { TransactionType } from '@/types'
 
 export function cn(...inputs: ClassValue[]) {
   return clsx(inputs)
@@ -46,6 +47,11 @@ export function monthlyAmount(amount: number, frequency: string): number {
   if (frequency === 'annual') return amount / 12
   if (frequency === 'weekly') return amount * (52 / 12)
   return amount
+}
+
+// Income adds to checking; expenses and savings transfers both leave checking
+export function transactionDelta(type: TransactionType, amount: number): number {
+  return type === 'income' ? amount : -amount
 }
 
 export const BUCKET_LABELS: Record<string, string> = {

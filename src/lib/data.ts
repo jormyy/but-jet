@@ -1,7 +1,40 @@
+import { mutate } from 'swr'
 import { createClient } from '@/lib/supabase/client'
-import { getMonthRange } from '@/lib/utils'
+import { getMonthRange, localDateString } from '@/lib/utils'
 
 const supabase = () => createClient()
+
+// Applies a transaction's effect on the checking balance to the latest net worth snapshot
+// (creating today's snapshot, carried forward from the prior one, if it doesn't exist yet)
+export async function adjustCheckingBalance(delta: number) {
+  if (delta === 0) return
+  const client = supabase()
+  const { data: { user } } = await client.auth.getUser()
+  if (!user) return
+
+  const { data: latest } = await client
+    .from('net_worth_snapshots')
+    .select('id, date, assets, liabilities')
+    .order('date', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const assets: Record<string, number> = { ...(latest?.assets ?? {}) }
+  assets['Checking'] = (assets['Checking'] ?? 0) + delta
+  const liabilities: Record<string, number> = latest?.liabilities ?? {}
+  const total = Object.values(assets).reduce((s, v) => s + v, 0) - Object.values(liabilities).reduce((s, v) => s + v, 0)
+
+  const today = localDateString()
+  const { error } = latest?.date === today
+    ? await client.from('net_worth_snapshots').update({ assets, liabilities, total }).eq('id', latest.id)
+    : await client.from('net_worth_snapshots').insert({ user_id: user.id, date: today, assets, liabilities, total })
+
+  if (error) {
+    console.error('adjustCheckingBalance failed:', error.message)
+    return
+  }
+  mutate('snapshots')
+}
 
 export async function fetchBills() {
   const [{ data: bills, error: billsError }, { data: categories, error: categoriesError }] = await Promise.all([
