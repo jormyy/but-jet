@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { Nav } from '@/components/nav'
 import { HomeTab } from '@/components/tabs/home-tab'
@@ -20,14 +21,26 @@ const tabs = [
 
 export default function AppLayout() {
   const pathname = usePathname()
+  // Tabs stay mounted once visited so switching back is instant, but we only
+  // mount (and start fetching) a tab the first time it's actually opened —
+  // mounting all six up front fires every tab's fetches at once and the
+  // resulting burst of re-renders can eat the main thread long enough that
+  // a nav tap gets queued behind it.
+  const [visited, setVisited] = useState(() => new Set([pathname]))
+
+  useEffect(() => {
+    setVisited(prev => (prev.has(pathname) ? prev : new Set(prev).add(pathname)))
+  }, [pathname])
 
   return (
     <div className="max-w-lg mx-auto pb-28">
-      {tabs.map(({ path, component: Tab }) => (
-        <div key={path} className={pathname === path ? undefined : 'hidden'}>
-          <Tab />
-        </div>
-      ))}
+      {tabs
+        .filter(({ path }) => visited.has(path))
+        .map(({ path, component: Tab }) => (
+          <div key={path} className={pathname === path ? undefined : 'hidden'}>
+            <Tab />
+          </div>
+        ))}
       <Nav />
     </div>
   )
