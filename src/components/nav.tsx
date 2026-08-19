@@ -1,8 +1,8 @@
 'use client'
 
-import Link from 'next/link'
+import Link, { useLinkStatus } from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, ArrowLeftRight, Receipt, TrendingUp, Target, PieChart } from 'lucide-react'
+import { LayoutDashboard, ArrowLeftRight, Receipt, TrendingUp, Target, PieChart, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const links = [
@@ -13,6 +13,20 @@ const links = [
   { href: '/net-worth', label: 'Worth', icon: TrendingUp },
   { href: '/goals', label: 'Goals', icon: Target },
 ]
+
+// Lives inside the Link so useLinkStatus can see its pending state. Delayed
+// and fixed-size so a fast (already-prefetched) navigation never flashes it —
+// it only shows up when a tap is genuinely still waiting on the network.
+function NavIcon({ Icon, active }: { Icon: LucideIcon; active: boolean }) {
+  const { pending } = useLinkStatus()
+  return (
+    <Icon
+      size={20}
+      strokeWidth={active ? 2.5 : 1.75}
+      className={cn('transition-opacity', pending && 'opacity-40 duration-150 delay-150')}
+    />
+  )
+}
 
 export function Nav() {
   const pathname = usePathname()
@@ -33,7 +47,7 @@ export function Nav() {
                   : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'
               )}
             >
-              <Icon size={20} strokeWidth={active ? 2.5 : 1.75} />
+              <NavIcon Icon={Icon} active={active} />
               {label}
             </Link>
           )
