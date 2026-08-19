@@ -72,21 +72,16 @@ export async function fetchCashflow() {
     }
   })
 
-  const results = await Promise.all(
-    months.map(({ start, end }) =>
-      supabase()
-        .from('transactions')
-        .select('type, amount')
-        .gte('date', start)
-        .lte('date', end)
-    )
-  )
-  for (const { error } of results) {
-    if (error) throw error
-  }
+  const { data, error } = await supabase()
+    .from('transactions')
+    .select('date, type, amount')
+    .gte('date', months[0].start)
+    .lte('date', months[months.length - 1].end)
+  if (error) throw error
 
-  return months.map(({ label }, i) => {
-    const mt = results[i].data ?? []
+  const rows = data ?? []
+  return months.map(({ label, start, end }) => {
+    const mt = rows.filter(t => t.date >= start && t.date <= end)
     return {
       month: label,
       income: mt.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0),

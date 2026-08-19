@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { Nav } from '@/components/nav'
 import { HomeTab } from '@/components/tabs/home-tab'
@@ -27,10 +27,9 @@ export default function AppLayout() {
   // resulting burst of re-renders can eat the main thread long enough that
   // a nav tap gets queued behind it.
   const [visited, setVisited] = useState(() => new Set([pathname]))
-
-  useEffect(() => {
-    setVisited(prev => (prev.has(pathname) ? prev : new Set(prev).add(pathname)))
-  }, [pathname])
+  if (!visited.has(pathname)) {
+    setVisited(prev => new Set(prev).add(pathname))
+  }
 
   return (
     <div className="max-w-lg mx-auto pb-28">
