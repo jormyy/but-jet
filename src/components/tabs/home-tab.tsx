@@ -1,5 +1,6 @@
 'use client'
 
+import { useDeferredValue } from 'react'
 import useSWR from 'swr'
 import {
   fetchBills,
@@ -54,6 +55,14 @@ export function HomeTab() {
   }
   const spendingByCategory = Object.values(catMap).sort((a, b) => b.amount - a.amount)
 
+  // The pie/bar charts do an expensive synchronous SVG layout pass on every
+  // data change. Deferring their inputs lets React commit the cheap parts of
+  // the page (stat cards, numbers) immediately and render the charts as a
+  // low-priority, interruptible update instead — so a nav tap that lands
+  // while data is still loading doesn't get stuck behind the chart render.
+  const deferredSpendingByCategory = useDeferredValue(spendingByCategory)
+  const deferredCashflowData = useDeferredValue(cashflowData ?? [])
+
   return (
     <DashboardClient
       monthLabel={getMonthLabel()}
@@ -63,8 +72,8 @@ export function HomeTab() {
       committedBills={committedBills}
       remainingSpendable={remainingSpendable}
       savingsRate={savingsRate}
-      spendingByCategory={spendingByCategory}
-      cashflowData={cashflowData ?? []}
+      spendingByCategory={deferredSpendingByCategory}
+      cashflowData={deferredCashflowData}
     />
   )
 }
