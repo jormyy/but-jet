@@ -135,6 +135,17 @@ export function NetWorthTab() {
 
   const portfolioTotal = holdings.reduce((s, h) => s + h.current_value, 0)
   const latest = snapshots[snapshots.length - 1]
+
+  const displayAssets = { ...(latest?.assets ?? {}) }
+  if (portfolioTotal > 0) {
+    displayAssets['Investments'] = portfolioTotal
+  } else {
+    delete displayAssets['Investments']
+  }
+  const displayTotal = latest
+    ? Object.values(displayAssets).reduce((s, v) => s + v, 0) - Object.values(latest.liabilities).reduce((s, v) => s + v, 0)
+    : 0
+
   const cutoff = rangeCutoff(range)
   const rangedSnapshots = cutoff ? snapshots.filter(s => new Date(s.date + 'T00:00:00') >= cutoff) : snapshots
   const chartData = rangedSnapshots.map(s => ({
@@ -155,18 +166,20 @@ export function NetWorthTab() {
       {latest && (
         <div className="rounded-xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
           <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Net worth</p>
-          <p className={`text-3xl font-semibold tabular-nums mt-1 ${latest.total >= 0 ? 'text-zinc-900 dark:text-zinc-100' : 'text-red-500'}`}>
-            {formatCurrency(latest.total)}
+          <p className={`text-3xl font-semibold tabular-nums mt-1 ${displayTotal >= 0 ? 'text-zinc-900 dark:text-zinc-100' : 'text-red-500'}`}>
+            {formatCurrency(displayTotal)}
           </p>
-          <p className="text-xs text-zinc-400 mt-0.5">As of {formatDate(latest.date)}</p>
+          <p className="text-xs text-zinc-400 mt-0.5">
+            As of {formatDate(latest.date)}{portfolioTotal > 0 ? ' · investments live' : ''}
+          </p>
         </div>
       )}
 
-      {latest && Object.keys(latest.assets).length > 0 && (
+      {latest && Object.keys(displayAssets).length > 0 && (
         <div>
           <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2 px-1">Assets</p>
           <div className="flex flex-col divide-y divide-zinc-100 dark:divide-zinc-800 rounded-xl border border-zinc-100 dark:border-zinc-800 overflow-hidden">
-            {Object.entries(latest.assets).map(([name, value]) => (
+            {Object.entries(displayAssets).map(([name, value]) => (
               name === 'Investments' ? (
                 <div key={name} className="flex items-center justify-between px-4 py-3 bg-white dark:bg-zinc-900">
                   <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{name}</span>
