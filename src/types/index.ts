@@ -27,6 +27,7 @@ export interface Transaction {
   description: string | null
   category_id: string | null
   date: string
+  is_cash: boolean
   created_at: string
   category?: Category
 }

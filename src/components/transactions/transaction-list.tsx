@@ -3,7 +3,7 @@
 import { Transaction } from '@/types'
 import { formatCurrency, formatDate, transactionDelta } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
-import { adjustCheckingBalance } from '@/lib/data'
+import { adjustAccountBalance } from '@/lib/data'
 import { useState } from 'react'
 import { SwipeableRow } from '@/components/ui/swipeable-row'
 import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog'
@@ -25,7 +25,7 @@ export function TransactionList({ transactions, onDelete, onEdit }: TransactionL
     setDeleting(true)
     const { error } = await supabase.from('transactions').delete().eq('id', confirmTarget.id)
     if (!error) {
-      await adjustCheckingBalance(-transactionDelta(confirmTarget.type, confirmTarget.amount))
+      await adjustAccountBalance(-transactionDelta(confirmTarget.type, confirmTarget.amount), confirmTarget.is_cash ? 'Cash' : 'Checking')
     }
     setDeleting(false)
     setConfirmTarget(null)
@@ -67,6 +67,7 @@ export function TransactionList({ transactions, onDelete, onEdit }: TransactionL
                         <span className="text-xs text-zinc-400 truncate">
                           {t.category?.name ?? 'Uncategorized'}
                           {t.description && t.merchant ? ` · ${t.description}` : ''}
+                          {t.is_cash ? ' · Cash' : ''}
                         </span>
                       </div>
                       <span

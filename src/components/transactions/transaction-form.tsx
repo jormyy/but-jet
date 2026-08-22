@@ -8,7 +8,7 @@ import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { BUCKET_LABELS, localDateString, transactionDelta } from '@/lib/utils'
 import { CATEGORY_COLORS as COLORS } from '@/lib/colors'
-import { adjustCheckingBalance } from '@/lib/data'
+import { adjustAccountBalance } from '@/lib/data'
 
 interface TransactionFormProps {
   onSuccess: () => void
@@ -29,6 +29,7 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
     description: transaction?.description ?? '',
     category_id: transaction?.category_id ?? '',
     date: transaction?.date ?? localDateString(),
+    is_cash: transaction?.is_cash ?? false,
   })
 
   // Inline new category form
@@ -95,14 +96,22 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
       description: form.description || null,
       category_id: form.category_id || null,
       date: form.date,
+      is_cash: form.is_cash,
     }
 
     if (isEdit) {
       const { error } = await supabase.from('transactions').update(payload).eq('id', transaction.id)
       if (!error) {
+        const oldAccount = transaction.is_cash ? 'Cash' : 'Checking'
+        const newAccount = payload.is_cash ? 'Cash' : 'Checking'
         const oldDelta = transactionDelta(transaction.type, transaction.amount)
         const newDelta = transactionDelta(payload.type, payload.amount)
-        await adjustCheckingBalance(newDelta - oldDelta)
+        if (oldAccount === newAccount) {
+          await adjustAccountBalance(newDelta - oldDelta, newAccount)
+        } else {
+          await adjustAccountBalance(-oldDelta, oldAccount)
+          await adjustAccountBalance(newDelta, newAccount)
+        }
       }
       setLoading(false)
       if (!error) onSuccess()
@@ -115,7 +124,7 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
     const { error } = await supabase.from('transactions').insert({ user_id: user.id, ...payload })
 
     if (!error) {
-      await adjustCheckingBalance(transactionDelta(payload.type, payload.amount))
+      await adjustAccountBalance(transactionDelta(payload.type, payload.amount), payload.is_cash ? 'Cash' : 'Checking')
     }
 
     if (!error && form.merchant && form.category_id) {
@@ -128,7 +137,7 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
 
     setLoading(false)
     if (!error) {
-      setForm({ type: 'expense', amount: '', merchant: '', description: '', category_id: '', date: localDateString() })
+      setForm({ type: 'expense', amount: '', merchant: '', description: '', category_id: '', date: localDateString(), is_cash: false })
       setSuggestedCategoryId('')
       onSuccess()
     }
@@ -283,6 +292,17 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
         onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
         required
       />
+
+      <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300 select-none">
+        <input
+          type="checkbox"
+          id="is_cash"
+          checked={form.is_cash}
+          onChange={e => setForm(f => ({ ...f, is_cash: e.target.checked }))}
+          className="w-4 h-4 rounded border-zinc-300 dark:border-zinc-600 accent-zinc-900 dark:accent-zinc-100"
+        />
+        Cash payment
+      </label>
 
       <Button type="submit" disabled={loading || !form.amount}>
         {loading ? 'Saving...' : isEdit ? 'Save changes' : 'Add Transaction'}
