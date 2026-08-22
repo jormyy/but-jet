@@ -1,6 +1,6 @@
 'use client'
 
-import useSWR, { mutate } from 'swr'
+import useSWR, { useSWRConfig } from 'swr'
 import { createClient } from '@/lib/supabase/client'
 import { fetchTransactions, monthKey } from '@/lib/data'
 import { Transaction } from '@/types'
@@ -14,6 +14,7 @@ import { Plus, Settings2 } from 'lucide-react'
 
 export function TransactionsTab() {
   const supabase = createClient()
+  const { mutate } = useSWRConfig()
   const [addOpen, setAddOpen] = useState(false)
   const [catsOpen, setCatsOpen] = useState(false)
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)

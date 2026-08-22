@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSWRConfig } from 'swr'
 import { createClient } from '@/lib/supabase/client'
 import { Category, Transaction, TransactionType, Bucket } from '@/types'
 import { Input } from '@/components/ui/input'
@@ -17,6 +18,7 @@ interface TransactionFormProps {
 
 export function TransactionForm({ onSuccess, transaction }: TransactionFormProps) {
   const supabase = createClient()
+  const { mutate } = useSWRConfig()
   const isEdit = !!transaction
   const [loading, setLoading] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
@@ -107,10 +109,10 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
         const oldDelta = transactionDelta(transaction.type, transaction.amount)
         const newDelta = transactionDelta(payload.type, payload.amount)
         if (oldAccount === newAccount) {
-          await adjustAccountBalance(newDelta - oldDelta, newAccount)
+          await adjustAccountBalance(newDelta - oldDelta, newAccount, mutate)
         } else {
-          await adjustAccountBalance(-oldDelta, oldAccount)
-          await adjustAccountBalance(newDelta, newAccount)
+          await adjustAccountBalance(-oldDelta, oldAccount, mutate)
+          await adjustAccountBalance(newDelta, newAccount, mutate)
         }
       }
       setLoading(false)
@@ -124,7 +126,7 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
     const { error } = await supabase.from('transactions').insert({ user_id: user.id, ...payload })
 
     if (!error) {
-      await adjustAccountBalance(transactionDelta(payload.type, payload.amount), payload.is_cash ? 'Cash' : 'Checking')
+      await adjustAccountBalance(transactionDelta(payload.type, payload.amount), payload.is_cash ? 'Cash' : 'Checking', mutate)
     }
 
     if (!error && form.merchant && form.category_id) {

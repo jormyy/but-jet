@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { mutate } from 'swr'
+import { useSWRConfig } from 'swr'
 import { StatCard } from '@/components/ui/stat-card'
 import { SpendingPie } from '@/components/charts/spending-pie'
 import { CashflowBar } from '@/components/charts/cashflow-bar'
@@ -38,6 +38,7 @@ export function DashboardClient({
 }: Props) {
   const [addOpen, setAddOpen] = useState(false)
   const supabase = createClient()
+  const { mutate } = useSWRConfig()
 
   async function handleSignOut() {
     await supabase.auth.signOut()

@@ -1,12 +1,14 @@
-import { mutate } from 'swr'
+import type { ScopedMutator } from 'swr'
 import { createClient } from '@/lib/supabase/client'
 import { getMonthRange, localDateString } from '@/lib/utils'
 
 const supabase = () => createClient()
 
 // Applies a transaction's effect on an asset balance (e.g. Checking, Cash) to the latest net worth
-// snapshot (creating today's snapshot, carried forward from the prior one, if it doesn't exist yet)
-export async function adjustAccountBalance(delta: number, account: string = 'Checking') {
+// snapshot (creating today's snapshot, carried forward from the prior one, if it doesn't exist yet).
+// `mutate` must be the context-bound mutator from the caller's `useSWRConfig()`, since SWRProvider
+// uses a custom cache provider — the module-level `mutate` from 'swr' targets an unrelated cache.
+export async function adjustAccountBalance(delta: number, account: string = 'Checking', mutate?: ScopedMutator) {
   if (delta === 0) return
   const client = supabase()
   const { data: { user } } = await client.auth.getUser()
@@ -33,7 +35,7 @@ export async function adjustAccountBalance(delta: number, account: string = 'Che
     console.error('adjustAccountBalance failed:', error.message)
     return
   }
-  mutate('snapshots')
+  mutate?.('snapshots')
 }
 
 export async function fetchBills() {

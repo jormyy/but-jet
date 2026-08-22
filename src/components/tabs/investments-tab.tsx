@@ -1,6 +1,6 @@
 'use client'
 
-import useSWR, { mutate } from 'swr'
+import useSWR, { useSWRConfig } from 'swr'
 import { createClient } from '@/lib/supabase/client'
 import { fetchInvestments } from '@/lib/data'
 import { InvestmentHolding } from '@/types'
@@ -15,6 +15,7 @@ import { Plus, RefreshCw } from 'lucide-react'
 
 export function InvestmentsTab() {
   const supabase = createClient()
+  const { mutate } = useSWRConfig()
   const { data } = useSWR('investments', fetchInvestments)
   const holdings = (data ?? []) as InvestmentHolding[]
 

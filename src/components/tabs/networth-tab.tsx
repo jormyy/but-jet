@@ -1,6 +1,6 @@
 'use client'
 
-import useSWR, { mutate } from 'swr'
+import useSWR, { useSWRConfig } from 'swr'
 import { createClient } from '@/lib/supabase/client'
 import { fetchSnapshots, fetchInvestments } from '@/lib/data'
 import { NetWorthSnapshot, InvestmentHolding } from '@/types'
@@ -33,6 +33,7 @@ function rangeCutoff(range: Range): Date | null {
 
 export function NetWorthTab() {
   const supabase = createClient()
+  const { mutate } = useSWRConfig()
   const { data } = useSWR('snapshots', fetchSnapshots)
   const snapshots = (data ?? []) as NetWorthSnapshot[]
   const { data: investmentsData } = useSWR('investments', fetchInvestments)

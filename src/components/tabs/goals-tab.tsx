@@ -1,6 +1,6 @@
 'use client'
 
-import useSWR, { mutate } from 'swr'
+import useSWR, { useSWRConfig } from 'swr'
 import { createClient } from '@/lib/supabase/client'
 import { fetchGoals } from '@/lib/data'
 import { Goal } from '@/types'
@@ -13,6 +13,7 @@ import { Plus, Trash2 } from 'lucide-react'
 
 export function GoalsTab() {
   const supabase = createClient()
+  const { mutate } = useSWRConfig()
   const { data } = useSWR('goals', fetchGoals)
   const goals = (data ?? []) as Goal[]
 

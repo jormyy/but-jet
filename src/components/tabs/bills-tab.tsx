@@ -1,6 +1,6 @@
 'use client'
 
-import useSWR, { mutate } from 'swr'
+import useSWR, { useSWRConfig } from 'swr'
 import { createClient } from '@/lib/supabase/client'
 import { fetchBills } from '@/lib/data'
 import { RecurringBill, Category, Bucket } from '@/types'
@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils'
 
 export function BillsTab() {
   const supabase = createClient()
+  const { mutate } = useSWRConfig()
   const { data } = useSWR('bills', fetchBills)
   const bills = (data?.bills ?? []) as RecurringBill[]
   const categories = (data?.categories ?? []) as Category[]
