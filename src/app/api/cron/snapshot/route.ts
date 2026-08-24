@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   const { data: usersData, error: usersError } = await supabase.auth.admin.listUsers({ perPage: 1000 })
   if (usersError) return NextResponse.json({ error: usersError.message }, { status: 500 })
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date())
   let inserted = 0
   let skipped = 0
 

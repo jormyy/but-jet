@@ -150,7 +150,7 @@ export function NetWorthTab() {
   const cutoff = rangeCutoff(range)
   const rangedSnapshots = cutoff ? snapshots.filter(s => new Date(s.date + 'T00:00:00') >= cutoff) : snapshots
   const chartData = rangedSnapshots.map(s => ({
-    date: new Date(s.date + 'T00:00:00').toLocaleDateString('en-US', range === '1M' ? { month: 'short', day: 'numeric' } : { month: 'short', year: '2-digit' }),
+    date: new Date(s.date + 'T00:00:00').toLocaleDateString('en-US', range === '1M' ? { month: 'short', day: 'numeric' } : { month: 'short', year: 'numeric' }),
     total: s.total,
   }))
 
