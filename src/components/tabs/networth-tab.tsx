@@ -248,7 +248,7 @@ export function NetWorthTab() {
             ))}
           </div>
         </div>
-        <NetWorthLine data={chartData} />
+        <NetWorthLine data={chartData} sparseTicks={range === '1M'} />
       </div>
 
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="New net worth snapshot">
