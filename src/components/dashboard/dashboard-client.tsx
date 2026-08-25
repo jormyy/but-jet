@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Plus, LogOut, Infinity as InfinityIcon } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
+import { clearPersistedCaches } from '@/lib/swr-cache'
 import { currentMonthKey } from '@/lib/data'
 
 interface Props {
@@ -42,6 +43,10 @@ export function DashboardClient({
 
   async function handleSignOut() {
     await supabase.auth.signOut()
+    // The persisted cache holds this account's balances and transactions. It
+    // has to go with the session, or the next person to sign in on this device
+    // sees them while their own data is still loading.
+    clearPersistedCaches()
     window.location.href = '/login'
   }
 

@@ -1,0 +1,72 @@
+{
+  "goal": "but-jet-whole-system-pwa-optimization",
+  "branch": "perf/full-pwa-optimization",
+  "currentWave": 0,
+  "waveName": "Inspect and baseline",
+  "units": { "completed": 0, "total": 42 },
+  "environment": {
+    "node": "26.7.0",
+    "next": "16.3.1 (Turbopack)",
+    "react": "19.2.8",
+    "postgres": "17.6.1.155 (local stack matches production)",
+    "localSupabase": "running (api 54321, db 54322)",
+    "productionSupabase": "tuxuvtjcxvtsjhqvxxae (read-only inspection only)",
+    "browsers": ["chromium 151.0.7922.34", "webkit 26.5", "agent-browser 0.25.4 session butjet-perf-opt"]
+  },
+  "baselineCommands": {
+    "npm ci": "438 packages, ok",
+    "npx tsc --noEmit": "clean (exit 0)",
+    "npx eslint .": "3 errors, 6 warnings (pre-existing)",
+    "npx next build": "success; median 6.703s over 5 runs (min 6.630 max 7.063 stdev 0.178)",
+    "tests": "NONE — repository has no test runner or tests"
+  },
+  "baselineMeasurements": {
+    "buildMedianSeconds": 6.703,
+    "precache": { "entries": 23, "sizeKiB": 1368.44 },
+    "criticalPayloadWireBytesGzip": {
+      "/login": { "html": 2969, "js": 249344, "css": 7987, "font": 29286, "total": 289586, "scripts": 9 },
+      "/": { "html": 3891, "js": 381645, "css": 7987, "font": 29286, "total": 422809, "scripts": 9 },
+      "note": "all six app routes are byte-identical: the client layout statically imports every tab"
+    },
+    "coldLoadChromiumPhone": {
+      "n": 5, "fcpMs": 16, "lcpMs": 108, "domContentLoadedMs": 13.2, "loadMs": 59.1,
+      "cls": 0.1, "requestCount": 33, "decodedBytes": 1435438
+    },
+    "routeTransitionMsMedian": { "/transactions": 12.4, "/bills": 16.5, "/investments": 15.5, "/net-worth": 16.1, "/goals": 16.4 },
+    "duplicateRestQueriesOnColdLoad": 6,
+    "investmentsTabFirstVisitRequests": { "total": 14, "ticker": 6, "restWrites": 8 },
+    "visibilityRefreshBurst3Cycles": { "total": 44, "ticker": 18, "holdingWrites": 18 },
+    "pwaChecks": { "chromium": "10/17", "webkit": "6/17" }
+  },
+  "databaseChecks": {
+    "indexes": "9 total, all PK/UNIQUE; no index on user_id for 6 of 7 tables; 8 FK columns unindexed",
+    "rls": "enabled on all 7 tables; auth.uid() = user_id, not wrapped in a subquery",
+    "grantsInMigrations": "MISSING — fresh project from these migrations cannot SELECT/INSERT/UPDATE/DELETE",
+    "hotPathPlans": "Seq Scan on transactions, net_worth_snapshots, categories, recurring_bills, goals, investment_holdings, merchant_categories"
+  },
+  "openFindings": {
+    "critical": 1,
+    "high": 9,
+    "medium": 14,
+    "low": 9
+  },
+  "browserCoverage": { "chromium": "baseline captured", "webkit": "baseline captured", "safari": "blocked — see blockers" },
+  "blockers": [
+    {
+      "capability": "administrator password for `sudo safaridriver --enable` (or a human toggling Safari Settings > Developer > Allow remote automation)",
+      "gate": "real Safari + installed-PWA checks",
+      "proof": "POST http://127.0.0.1:4599/session -> {\"error\":\"session not created\",\"message\":\"You must enable 'Allow remote automation'...\"}",
+      "substitute": "Playwright WebKit 26.5 (Safari 26.4 engine) + Chromium + static Safari-markup verification",
+      "residualRisk": "pending"
+    },
+    {
+      "capability": "service-worker-served navigation under Playwright WebKit offline emulation",
+      "gate": "WebKit offline launch / offline navigation",
+      "proof": "ctx.setOffline(true) -> 'WebKit encountered an internal error'; ctx.route abort -> 'Blocked by Web Inspector'",
+      "substitute": "Chromium offline flows + direct WebKit precache content assertions",
+      "residualRisk": "pending"
+    }
+  ],
+  "cleanupState": { "agentBrowserSession": "butjet-perf-opt (open)", "servers": ["next start :3100", "supabase local stack"], "artifactsOutsideRepo": true },
+  "pullRequest": { "state": "not started" }
+}
