@@ -10,8 +10,10 @@ import { Button } from '@/components/ui/button'
 import { InvestmentForm } from '@/components/investments/investment-form'
 import { InvestmentList } from '@/components/investments/investment-list'
 import { fetchQuote } from '@/components/investments/categories'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Plus, RefreshCw } from 'lucide-react'
+
+const AUTO_REFRESH_MS = 5 * 60 * 1000
 
 export function InvestmentsTab() {
   const supabase = createClient()
@@ -21,6 +23,7 @@ export function InvestmentsTab() {
 
   const total = holdings.reduce((s, h) => s + h.current_value, 0)
   const tickerHoldings = holdings.filter(h => h.ticker && h.shares)
+  const hasTickers = tickerHoldings.length > 0
 
   const [addOpen, setAddOpen] = useState(false)
   const [editingInvestment, setEditingInvestment] = useState<InvestmentHolding | null>(null)
@@ -34,13 +37,21 @@ export function InvestmentsTab() {
     mutate('investments')
   }
 
+  // Read via ref so the polling/focus effects below always see the latest
+  // holdings without needing to tear down and restart their timers.
+  const tickerHoldingsRef = useRef(tickerHoldings)
+  useEffect(() => {
+    tickerHoldingsRef.current = tickerHoldings
+  }, [tickerHoldings])
+
   async function handleRefreshPrices() {
-    if (tickerHoldings.length === 0) return
+    const current = tickerHoldingsRef.current
+    if (current.length === 0) return
     setRefreshing(true)
     setRefreshFailed([])
 
     const quotes = await Promise.all(
-      tickerHoldings.map(h => fetchQuote(h.ticker!).then(q => ({ id: h.id, ticker: h.ticker!, shares: h.shares!, quote: q })))
+      current.map(h => fetchQuote(h.ticker!).then(q => ({ id: h.id, ticker: h.ticker!, shares: h.shares!, quote: q })))
     )
 
     const failed = quotes.filter(q => q.quote === null).map(q => q.ticker)
@@ -62,6 +73,27 @@ export function InvestmentsTab() {
     setRefreshFailed(failed)
     refresh()
   }
+
+  // Auto-refresh prices on load and on a timer while there's something to
+  // price, plus whenever the tab regains focus (e.g. laptop wakes from sleep).
+  useEffect(() => {
+    if (!hasTickers) return
+    handleRefreshPrices()
+    const id = setInterval(handleRefreshPrices, AUTO_REFRESH_MS)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasTickers])
+
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === 'visible' && tickerHoldingsRef.current.length > 0) {
+        handleRefreshPrices()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div className="px-4 pt-6 space-y-4">
