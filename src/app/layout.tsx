@@ -8,13 +8,13 @@ import './globals.css'
 const geist = Geist({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Fine Ants',
+  title: 'But-Jet',
   description: 'Personal finance tracker',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Fine Ants',
+    title: 'But-Jet',
   },
 }
 

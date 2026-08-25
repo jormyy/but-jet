@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { SWRConfig, type Cache } from 'swr'
 
-const STORAGE_KEY = 'fine-ants-swr-cache'
+const STORAGE_KEY = 'but-jet-swr-cache'
 
 function emptyCache(): Cache {
   return new Map()

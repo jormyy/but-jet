@@ -46,7 +46,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center p-6">
       <div className="max-w-sm w-full space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">Fine Ants</h1>
+          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">But-Jet</h1>
           <p className="text-sm text-zinc-500 mt-1">
             {mode === 'login' ? 'Sign in to your account' : 'Create an account'}
           </p>
