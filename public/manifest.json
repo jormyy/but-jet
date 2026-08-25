@@ -1,7 +1,7 @@
 {
-  "name": "But-Jet",
-  "short_name": "But-Jet",
-  "description": "Personal finance tracker",
+  "name": "But Jet",
+  "short_name": "But Jet",
+  "description": "Personal budget tracker",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

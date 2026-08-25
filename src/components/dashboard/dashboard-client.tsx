@@ -57,7 +57,7 @@ export function DashboardClient({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">But-Jet</h1>
+          <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">But Jet</h1>
           <p className="text-sm text-zinc-400">{monthLabel}</p>
         </div>
         <div className="flex gap-2">
