@@ -16,7 +16,7 @@ export async function adjustAccountBalance(delta: number, account: string = 'Che
 
   const { data: latest } = await client
     .from('net_worth_snapshots')
-    .select('id, date, assets, liabilities')
+    .select('date, assets, liabilities')
     .order('date', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -27,9 +27,9 @@ export async function adjustAccountBalance(delta: number, account: string = 'Che
   const total = Object.values(assets).reduce((s, v) => s + v, 0) - Object.values(liabilities).reduce((s, v) => s + v, 0)
 
   const today = localDateString()
-  const { error } = latest?.date === today
-    ? await client.from('net_worth_snapshots').update({ assets, liabilities, total }).eq('id', latest.id)
-    : await client.from('net_worth_snapshots').insert({ user_id: user.id, date: today, assets, liabilities, total })
+  const { error } = await client
+    .from('net_worth_snapshots')
+    .upsert({ user_id: user.id, date: today, assets, liabilities, total }, { onConflict: 'user_id,date' })
 
   if (error) {
     console.error('adjustAccountBalance failed:', error.message)

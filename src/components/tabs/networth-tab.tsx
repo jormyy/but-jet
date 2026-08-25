@@ -17,6 +17,9 @@ import { Plus, Trash2 } from 'lucide-react'
 interface AssetEntry { name: string; value: string }
 type EntryType = 'asset' | 'liability'
 
+const ASSET_NAME_SUGGESTIONS = ['Checking', 'Savings', 'Cash']
+const LIABILITY_NAME_SUGGESTIONS = ['Credit card', 'Student loan', 'Mortgage', 'Auto loan']
+
 const RANGES = ['1M', 'YTD', '1Y', '3Y', 'All'] as const
 type Range = typeof RANGES[number]
 
@@ -64,6 +67,20 @@ export function NetWorthTab() {
     setter(rows => rows.filter((_, idx) => idx !== i))
   }
 
+  function openAddModal() {
+    const assetEntries = Object.entries(latest?.assets ?? {})
+      .filter(([name]) => name !== 'Investments')
+      .map(([name, value]) => ({ name, value: String(value) }))
+    setAssets(assetEntries.length > 0 ? assetEntries : [{ name: '', value: '' }])
+
+    const liabEntries = Object.entries(latest?.liabilities ?? {})
+      .map(([name, value]) => ({ name, value: String(value) }))
+    setLiabilities(liabEntries.length > 0 ? liabEntries : [{ name: '', value: '' }])
+
+    setDate(localDateString())
+    setAddOpen(true)
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
@@ -84,13 +101,13 @@ export function NetWorthTab() {
     const totalAssets = Object.values(assetsMap).reduce((s, v) => s + v, 0)
     const totalLiab = Object.values(liabMap).reduce((s, v) => s + v, 0)
 
-    await supabase.from('net_worth_snapshots').insert({
+    await supabase.from('net_worth_snapshots').upsert({
       user_id: user.id,
       date,
       assets: assetsMap,
       liabilities: liabMap,
       total: totalAssets - totalLiab,
-    })
+    }, { onConflict: 'user_id,date' })
     setLoading(false)
     setAddOpen(false)
     setAssets([{ name: '', value: '' }])
@@ -158,7 +175,7 @@ export function NetWorthTab() {
     <div className="px-4 pt-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Net Worth</h1>
-        <Button onClick={() => setAddOpen(true)} size="sm">
+        <Button onClick={openAddModal} size="sm">
           <Plus size={14} className="mr-1" />
           Snapshot
         </Button>
@@ -270,7 +287,7 @@ export function NetWorthTab() {
             )}
             {assets.map((a, i) => (
               <div key={i} className="flex gap-2">
-                <Input placeholder="Name (e.g. Checking)" value={a.name} onChange={e => updateRow(setAssets, i, 'name', e.target.value)} />
+                <Input placeholder="Name (e.g. Checking)" list="asset-name-options" value={a.name} onChange={e => updateRow(setAssets, i, 'name', e.target.value)} />
                 <Input placeholder="$0" type="number" value={a.value} onChange={e => updateRow(setAssets, i, 'value', e.target.value)} className="w-28" />
                 {assets.length > 1 && (
                   <button type="button" onClick={() => removeRow(setAssets, i)} className="text-zinc-300 hover:text-red-500">
@@ -282,13 +299,16 @@ export function NetWorthTab() {
             <button type="button" onClick={() => addRow(setAssets)} className="text-xs text-zinc-400 hover:text-zinc-600">
               + Add asset
             </button>
+            <datalist id="asset-name-options">
+              {ASSET_NAME_SUGGESTIONS.map(name => <option key={name} value={name} />)}
+            </datalist>
           </div>
 
           <div className="space-y-2">
             <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Liabilities</p>
             {liabilities.map((l, i) => (
               <div key={i} className="flex gap-2">
-                <Input placeholder="Name (e.g. Credit card)" value={l.name} onChange={e => updateRow(setLiabilities, i, 'name', e.target.value)} />
+                <Input placeholder="Name (e.g. Credit card)" list="liability-name-options" value={l.name} onChange={e => updateRow(setLiabilities, i, 'name', e.target.value)} />
                 <Input placeholder="$0" type="number" value={l.value} onChange={e => updateRow(setLiabilities, i, 'value', e.target.value)} className="w-28" />
                 {liabilities.length > 1 && (
                   <button type="button" onClick={() => removeRow(setLiabilities, i)} className="text-zinc-300 hover:text-red-500">
@@ -300,6 +320,9 @@ export function NetWorthTab() {
             <button type="button" onClick={() => addRow(setLiabilities)} className="text-xs text-zinc-400 hover:text-zinc-600">
               + Add liability
             </button>
+            <datalist id="liability-name-options">
+              {LIABILITY_NAME_SUGGESTIONS.map(name => <option key={name} value={name} />)}
+            </datalist>
           </div>
 
           <Button type="submit" disabled={loading} className="w-full">
@@ -313,6 +336,7 @@ export function NetWorthTab() {
           <Input
             label="Name"
             id="entry-name"
+            list={editingEntry?.type === 'liability' ? 'liability-name-options' : 'asset-name-options'}
             value={editName}
             onChange={e => setEditName(e.target.value)}
             required
