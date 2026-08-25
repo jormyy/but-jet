@@ -30,7 +30,10 @@ export function GoalsTab() {
     e.preventDefault()
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) {
+      setLoading(false)
+      return
+    }
     await supabase.from('goals').insert({
       user_id: user.id,
       name: form.name,

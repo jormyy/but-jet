@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import useSWR, { useSWRConfig } from 'swr'
 import { createClient } from '@/lib/supabase/client'
+import { fetchCategories } from '@/lib/data'
 import { Category, Bucket } from '@/types'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -14,7 +16,11 @@ const BUCKETS = ['bills', 'spending', 'savings'] as Bucket[]
 
 export function CategoryManager() {
   const supabase = createClient()
-  const [categories, setCategories] = useState<Category[]>([])
+  const { mutate } = useSWRConfig()
+  // Shared with the bills and home tabs: editing a category here has to show
+  // up in their breakdowns, which it did not while this kept its own copy.
+  const { data } = useSWR('categories', fetchCategories)
+  const categories = (data ?? []) as Category[]
   const [name, setName] = useState('')
   const [bucket, setBucket] = useState<Bucket>('spending')
   const [color, setColor] = useState(COLORS[0])
@@ -27,12 +33,7 @@ export function CategoryManager() {
   })
   const [saving, setSaving] = useState(false)
 
-  async function load() {
-    const { data } = await supabase.from('categories').select('*').order('bucket').order('name')
-    setCategories((data ?? []) as Category[])
-  }
-
-  useEffect(() => { load() }, [])
+  const reload = () => mutate('categories')
 
   function startEdit(c: Category) {
     setEditingId(c.id)
@@ -50,7 +51,7 @@ export function CategoryManager() {
       bucket: editDraft.bucket,
       color: editDraft.color,
     }).eq('id', id)
-    await load()
+    await reload()
     setEditingId(null)
     setSaving(false)
   }
@@ -59,17 +60,18 @@ export function CategoryManager() {
     e.preventDefault()
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    await supabase.from('categories').insert({ user_id: user.id, name, bucket, color })
-    setName('')
+    if (user) {
+      await supabase.from('categories').insert({ user_id: user.id, name, bucket, color })
+      setName('')
+      reload()
+    }
     setLoading(false)
-    load()
   }
 
   async function handleDelete(id: string) {
     await supabase.from('categories').delete().eq('id', id)
     if (editingId === id) setEditingId(null)
-    load()
+    reload()
   }
 
   return (

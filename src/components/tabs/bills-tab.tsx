@@ -2,7 +2,7 @@
 
 import useSWR, { useSWRConfig } from 'swr'
 import { createClient } from '@/lib/supabase/client'
-import { fetchBills } from '@/lib/data'
+import { fetchBills, fetchCategories } from '@/lib/data'
 import { RecurringBill, Category, Bucket } from '@/types'
 import { formatCurrency, monthlyAmount, BUCKET_LABELS, localDateString } from '@/lib/utils'
 import { Modal } from '@/components/ui/modal'
@@ -16,9 +16,10 @@ import { cn } from '@/lib/utils'
 export function BillsTab() {
   const supabase = createClient()
   const { mutate } = useSWRConfig()
-  const { data } = useSWR('bills', fetchBills)
-  const bills = (data?.bills ?? []) as RecurringBill[]
-  const categories = (data?.categories ?? []) as Category[]
+  const { data: billsData } = useSWR('bills', fetchBills)
+  const { data: categoriesData } = useSWR('categories', fetchCategories)
+  const bills = (billsData ?? []) as RecurringBill[]
+  const categories = (categoriesData ?? []) as Category[]
 
   const [addOpen, setAddOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -34,7 +35,10 @@ export function BillsTab() {
     e.preventDefault()
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) {
+      setLoading(false)
+      return
+    }
     await supabase.from('recurring_bills').insert({
       user_id: user.id,
       name: form.name,

@@ -84,7 +84,10 @@ export function InvestmentForm({ onSuccess, investment }: InvestmentFormProps) {
     }
 
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) {
+      setLoading(false)
+      return
+    }
 
     const { error } = await supabase.from('investment_holdings').insert({ user_id: user.id, ...payload })
 

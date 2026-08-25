@@ -85,7 +85,10 @@ export function NetWorthTab() {
     e.preventDefault()
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) {
+      setLoading(false)
+      return
+    }
 
     const assetsMap: Record<string, number> = {}
     for (const a of assets.filter(a => a.name && a.value)) {

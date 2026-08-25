@@ -39,13 +39,22 @@ export async function adjustAccountBalance(delta: number, account: string = 'Che
 }
 
 export async function fetchBills() {
-  const [{ data: bills, error: billsError }, { data: categories, error: categoriesError }] = await Promise.all([
-    supabase().from('recurring_bills').select('*, category:categories(*)').order('next_due_date'),
-    supabase().from('categories').select('*').order('bucket').order('name'),
-  ])
-  if (billsError) throw billsError
-  if (categoriesError) throw categoriesError
-  return { bills: bills ?? [], categories: categories ?? [] }
+  const { data, error } = await supabase()
+    .from('recurring_bills')
+    .select('*, category:categories(*)')
+    .order('next_due_date')
+  if (error) throw error
+  return data ?? []
+}
+
+export async function fetchCategories() {
+  const { data, error } = await supabase()
+    .from('categories')
+    .select('*')
+    .order('bucket')
+    .order('name')
+  if (error) throw error
+  return data ?? []
 }
 
 export async function fetchTransactions(monthKey: string) {
