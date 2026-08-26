@@ -6,7 +6,8 @@ import { InvestmentHolding, InvestmentCategory } from '@/types'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, localDateString } from '@/lib/utils'
-import { INVESTMENT_CATEGORIES, fetchQuote } from './categories'
+import { INVESTMENT_CATEGORIES } from './categories'
+import { fetchQuote } from './quotes'
 
 interface InvestmentFormProps {
   onSuccess: () => void

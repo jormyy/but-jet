@@ -2,11 +2,12 @@
 // Shared by the ticker proxy (/api/ticker) and the price-refresh cron so both
 // hit Yahoo the same way.
 export async function fetchYahooQuote(symbol: string): Promise<{ name: string; price: number } | null> {
+  // Without a deadline a hung upstream request holds the whole invocation open.
   const res = await fetch(
     `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`,
-    { headers: { 'User-Agent': 'Mozilla/5.0' } }
-  )
-  if (!res.ok) return null
+    { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }
+  ).catch(() => null)
+  if (!res?.ok) return null
 
   const json = await res.json()
   const meta = json?.chart?.result?.[0]?.meta
