@@ -49,6 +49,11 @@ export function monthlyAmount(amount: number, frequency: string): number {
   return amount
 }
 
+export function netWorthTotal(assets: Record<string, number>, liabilities: Record<string, number>): number {
+  const sum = (m: Record<string, number>) => Object.values(m).reduce((s, v) => s + v, 0)
+  return sum(assets) - sum(liabilities)
+}
+
 // Income adds to checking; expenses and savings transfers both leave checking
 export function transactionDelta(type: TransactionType, amount: number): number {
   return type === 'income' ? amount : -amount

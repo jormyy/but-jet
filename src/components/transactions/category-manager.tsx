@@ -21,7 +21,7 @@ export function CategoryManager() {
   // Shared with the bills and home tabs: editing a category here has to show
   // up in their breakdowns, which it did not while this kept its own copy.
   const { data } = useSWR('categories', fetchCategories)
-  const categories = (data ?? []) as Category[]
+  const categories = data ?? []
   const [name, setName] = useState('')
   const [bucket, setBucket] = useState<Bucket>('spending')
   const [color, setColor] = useState(COLORS[0])

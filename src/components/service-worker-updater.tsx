@@ -18,15 +18,14 @@ export function ServiceWorkerUpdater() {
     const activate = (worker: ServiceWorker) => {
       if (reloading) return
       reloading = true
-      // The new worker only controls the page once it activates, and the page
-      // has to reload to run the code its precache now holds.
+      // Listen before asking: the page has to reload to run the code the new
+      // precache holds, and it only controls the page once it activates.
       navigator.serviceWorker.addEventListener('controllerchange', () => location.reload(), { once: true })
       worker.postMessage({ type: 'SKIP_WAITING' })
     }
 
-    // Adopting a new version mid-session would pull the page's own chunks out
-    // from under it, so wait until the app comes back to the foreground — the
-    // moment a user expects a launch, and the least disruptive place to reload.
+    // Adopting mid-session would pull the page's own chunks out from under it,
+    // so wait for the foreground: the moment a user expects a launch anyway.
     const adoptIfWaiting = async () => {
       if (document.visibilityState !== 'visible' || !registration) return
       await registration.update().catch(() => {})
@@ -44,22 +43,19 @@ export function ServiceWorkerUpdater() {
           if (reg.waiting) activate(reg.waiting)
           reg.addEventListener('updatefound', () => {
             const installing = reg.installing
-            // A worker that reaches "installed" while another already controls
-            // the page is an update, not a first install.
             installing?.addEventListener('statechange', () => {
+              // Installed while another worker controls the page: an update, not a first install.
               if (installing.state === 'installed' && navigator.serviceWorker.controller) adoptIfWaiting()
             })
           })
         })
-        .catch(() => {
-          // No service worker available (private browsing, unsupported
-          // context). The app works online without one.
-        })
+        // No service worker here (private browsing, unsupported context); the
+        // app works online without one.
+        .catch(() => {})
     }
 
     // Registering during the first render competes with the page's own assets,
-    // and navigating away mid-fetch aborts the script load outright. Wait until
-    // the launch has settled.
+    // and navigating away mid-fetch aborts the script load outright.
     const supportsIdle = 'requestIdleCallback' in window
     const idle = supportsIdle
       ? requestIdleCallback(register, { timeout: 4000 })

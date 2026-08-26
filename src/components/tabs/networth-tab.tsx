@@ -3,8 +3,7 @@
 import useSWR, { useSWRConfig } from 'swr'
 import { createClient } from '@/lib/supabase/client'
 import { fetchSnapshotSeries, fetchLatestSnapshot, fetchInvestments } from '@/lib/data'
-import { NetWorthSnapshot, InvestmentHolding } from '@/types'
-import { formatCurrency, formatDate, localDateString } from '@/lib/utils'
+import { formatCurrency, formatDate, localDateString, netWorthTotal } from '@/lib/utils'
 import dynamic from 'next/dynamic'
 import { ChartFrame } from '@/components/charts/chart-frame'
 import { Modal } from '@/components/ui/modal'
@@ -41,11 +40,10 @@ export function NetWorthTab() {
   const supabase = createClient()
   const { mutate } = useSWRConfig()
   const { data } = useSWR('snapshots', fetchSnapshotSeries)
-  const series = (data ?? []) as Pick<NetWorthSnapshot, 'date' | 'total'>[]
-  const { data: latestData } = useSWR('snapshot-latest', fetchLatestSnapshot)
-  const latest = latestData as NetWorthSnapshot | null | undefined
+  const series = data ?? []
+  const { data: latest } = useSWR('snapshot-latest', fetchLatestSnapshot)
   const { data: investmentsData } = useSWR('investments', fetchInvestments)
-  const holdings = (investmentsData ?? []) as InvestmentHolding[]
+  const holdings = investmentsData ?? []
 
   const [addOpen, setAddOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -108,15 +106,13 @@ export function NetWorthTab() {
     for (const l of liabilities.filter(l => l.name && l.value)) {
       liabMap[l.name] = parseFloat(l.value)
     }
-    const totalAssets = Object.values(assetsMap).reduce((s, v) => s + v, 0)
-    const totalLiab = Object.values(liabMap).reduce((s, v) => s + v, 0)
 
     await supabase.from('net_worth_snapshots').upsert({
       user_id: user.id,
       date,
       assets: assetsMap,
       liabilities: liabMap,
-      total: totalAssets - totalLiab,
+      total: netWorthTotal(assetsMap, liabMap),
     }, { onConflict: 'user_id,date' })
     setLoading(false)
     setAddOpen(false)
@@ -140,7 +136,7 @@ export function NetWorthTab() {
     const targetMap = editingEntry.type === 'asset' ? assetsMap : liabMap
     delete targetMap[editingEntry.name]
     targetMap[editName] = parseFloat(editValue)
-    const total = Object.values(assetsMap).reduce((s, v) => s + v, 0) - Object.values(liabMap).reduce((s, v) => s + v, 0)
+    const total = netWorthTotal(assetsMap, liabMap)
     await supabase.from('net_worth_snapshots').update({ assets: assetsMap, liabilities: liabMap, total }).eq('id', latest.id)
     setEntryLoading(false)
     setEditingEntry(null)
@@ -154,7 +150,7 @@ export function NetWorthTab() {
     const liabMap = { ...latest.liabilities }
     const targetMap = confirmEntry.type === 'asset' ? assetsMap : liabMap
     delete targetMap[confirmEntry.name]
-    const total = Object.values(assetsMap).reduce((s, v) => s + v, 0) - Object.values(liabMap).reduce((s, v) => s + v, 0)
+    const total = netWorthTotal(assetsMap, liabMap)
     await supabase.from('net_worth_snapshots').update({ assets: assetsMap, liabilities: liabMap, total }).eq('id', latest.id)
     setEntryLoading(false)
     setConfirmEntry(null)
@@ -169,9 +165,7 @@ export function NetWorthTab() {
   } else {
     delete displayAssets['Investments']
   }
-  const displayTotal = latest
-    ? Object.values(displayAssets).reduce((s, v) => s + v, 0) - Object.values(latest.liabilities).reduce((s, v) => s + v, 0)
-    : 0
+  const displayTotal = latest ? netWorthTotal(displayAssets, latest.liabilities) : 0
 
   const cutoff = rangeCutoff(range)
   const ranged = cutoff ? series.filter(s => new Date(s.date + 'T00:00:00') >= cutoff) : series

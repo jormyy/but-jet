@@ -16,7 +16,7 @@ export function GoalsTab() {
   const supabase = createClient()
   const { mutate } = useSWRConfig()
   const { data } = useSWR('goals', fetchGoals)
-  const goals = (data ?? []) as Goal[]
+  const goals = data ?? []
 
   const [addOpen, setAddOpen] = useState(false)
   const [loading, setLoading] = useState(false)

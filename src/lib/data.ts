@@ -1,6 +1,7 @@
 import type { ScopedMutator } from 'swr'
 import { createClient } from '@/lib/supabase/client'
 import { getMonthRange, localDateString } from '@/lib/utils'
+import type { Category, Goal, InvestmentHolding, NetWorthSnapshot, RecurringBill, Transaction } from '@/types'
 
 const supabase = () => createClient()
 
@@ -30,7 +31,7 @@ export async function adjustAccountBalance(delta: number, account: string = 'Che
   mutate?.('snapshot-latest')
 }
 
-export async function fetchBills() {
+export async function fetchBills(): Promise<RecurringBill[]> {
   const { data, error } = await supabase()
     .from('recurring_bills')
     .select('*, category:categories(*)')
@@ -39,7 +40,7 @@ export async function fetchBills() {
   return data ?? []
 }
 
-export async function fetchCategories() {
+export async function fetchCategories(): Promise<Category[]> {
   const { data, error } = await supabase()
     .from('categories')
     .select('*')
@@ -49,7 +50,7 @@ export async function fetchCategories() {
   return data ?? []
 }
 
-export async function fetchTransactions(monthKey: string) {
+export async function fetchTransactions(monthKey: string): Promise<Transaction[]> {
   // monthKey is 'YYYY-MM'
   const [year, month] = monthKey.split('-').map(Number)
   const d = new Date(year, month - 1, 1)
@@ -94,17 +95,19 @@ export async function fetchCashflow() {
   })
 }
 
-export async function fetchGoals() {
+export async function fetchGoals(): Promise<Goal[]> {
   const { data, error } = await supabase().from('goals').select('*').order('created_at')
   if (error) throw error
   return data ?? []
 }
 
+export type SnapshotPoint = Pick<NetWorthSnapshot, 'date' | 'total'>
+
 // The history chart only plots date against total. Selecting whole rows pulled
 // both JSONB columns for every day ever recorded -- 249 KB for two years of
 // daily snapshots, against 31 KB for the two columns the chart draws, and all
 // of it kept in the persisted cache.
-export async function fetchSnapshotSeries() {
+export async function fetchSnapshotSeries(): Promise<SnapshotPoint[]> {
   const { data, error } = await supabase()
     .from('net_worth_snapshots')
     .select('date, total')
@@ -115,7 +118,7 @@ export async function fetchSnapshotSeries() {
 
 // The asset and liability rows the user edits only ever come from the newest
 // snapshot.
-export async function fetchLatestSnapshot() {
+export async function fetchLatestSnapshot(): Promise<NetWorthSnapshot | null> {
   const { data, error } = await supabase()
     .from('net_worth_snapshots')
     .select('*')
@@ -126,7 +129,7 @@ export async function fetchLatestSnapshot() {
   return data
 }
 
-export async function fetchInvestments() {
+export async function fetchInvestments(): Promise<InvestmentHolding[]> {
   const { data, error } = await supabase()
     .from('investment_holdings')
     .select('*')

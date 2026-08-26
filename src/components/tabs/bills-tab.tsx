@@ -19,8 +19,8 @@ export function BillsTab() {
   const { mutate } = useSWRConfig()
   const { data: billsData } = useSWR('bills', fetchBills)
   const { data: categoriesData } = useSWR('categories', fetchCategories)
-  const bills = (billsData ?? []) as RecurringBill[]
-  const categories = (categoriesData ?? []) as Category[]
+  const bills = billsData ?? []
+  const categories = categoriesData ?? []
 
   const [addOpen, setAddOpen] = useState(false)
   const [loading, setLoading] = useState(false)

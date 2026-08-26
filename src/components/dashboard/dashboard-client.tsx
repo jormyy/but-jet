@@ -56,6 +56,9 @@ export function DashboardClient({
     // has to go with the session, or the next person to sign in on this device
     // sees them while their own data is still loading.
     clearPersistedCaches()
+    // A full load, not a client navigation: it is the only way to be sure no
+    // component is still holding this account's data in memory.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.href = '/login'
   }
 

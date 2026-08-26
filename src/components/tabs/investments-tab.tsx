@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { InvestmentForm } from '@/components/investments/investment-form'
 import { InvestmentList } from '@/components/investments/investment-list'
 import { fetchQuotes } from '@/components/investments/quotes'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Plus, RefreshCw } from 'lucide-react'
 
 const AUTO_REFRESH_MS = 5 * 60 * 1000
@@ -20,7 +20,9 @@ export function InvestmentsTab() {
   const supabase = createClient()
   const { mutate } = useSWRConfig()
   const { data } = useSWR('investments', fetchInvestments)
-  const holdings = (data ?? []) as InvestmentHolding[]
+  // Stable across renders so the polling effects below are not torn down and
+  // restarted every time anything else in the tab changes.
+  const holdings = useMemo(() => data ?? [], [data])
 
   const total = holdings.reduce((s, h) => s + h.current_value, 0)
   const tickers = tickersToPrice(holdings)

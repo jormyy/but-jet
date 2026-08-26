@@ -41,9 +41,8 @@ export async function GET(req: NextRequest) {
     return { symbol, quote }
   }))
 
-  const quotes = results
-    .filter(r => r.quote)
-    .map(r => ({ ticker: r.symbol, name: r.quote!.name, price: r.quote!.price }))
+  const quotes = results.flatMap(({ symbol, quote }) =>
+    quote ? [{ ticker: symbol, name: quote.name, price: quote.price }] : [])
   const missing = results.filter(r => !r.quote).map(r => r.symbol)
 
   return NextResponse.json({ quotes, missing }, {

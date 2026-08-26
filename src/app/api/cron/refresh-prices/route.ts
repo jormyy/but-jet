@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchYahooQuote } from '@/lib/quotes'
 import { pricedUpdates, tickersToPrice } from '@/lib/prices'
-import type { InvestmentHolding } from '@/types'
 
 export async function GET(req: NextRequest) {
   const auth = req.headers.get('authorization')
@@ -19,7 +18,7 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const rows = (holdings ?? []) as InvestmentHolding[]
+  const rows = holdings ?? []
   const tickers = tickersToPrice(rows)
   const prices = new Map<string, number>()
   const failed: string[] = []

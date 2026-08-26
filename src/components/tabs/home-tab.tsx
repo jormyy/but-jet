@@ -5,7 +5,6 @@ import useSWR from 'swr'
 import { fetchBills, fetchCategories, fetchTransactions, fetchCashflow, currentMonthKey } from '@/lib/data'
 import { getMonthLabel, monthlyAmount, BUCKET_COLORS } from '@/lib/utils'
 import { DashboardClient } from '@/components/dashboard/dashboard-client'
-import { Transaction, RecurringBill, Category } from '@/types'
 
 export function HomeTab() {
   const mk = currentMonthKey()
@@ -14,9 +13,9 @@ export function HomeTab() {
   const { data: txns, isLoading: txnsLoading } = useSWR(['txns', mk], ([, key]) => fetchTransactions(key as string))
   const { data: cashflowData } = useSWR('cashflow', fetchCashflow)
 
-  const bills = (billsData ?? []) as RecurringBill[]
-  const categories = (categoriesData ?? []) as Category[]
-  const transactions = (txns ?? []) as Transaction[]
+  const bills = billsData ?? []
+  const categories = categoriesData ?? []
+  const transactions = txns ?? []
 
   const incomeThisMonth = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
   const expensesThisMonth = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)

@@ -1,15 +1,14 @@
 'use client'
 
-import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
 import { SWRConfig, useSWRConfig, unstable_serialize, type Cache } from 'swr'
 import { readUserIdFromCookie } from '@/lib/supabase/session-cookie'
 import { readPersistedCache, writePersistedCache, type SwrState } from '@/lib/swr-cache'
 
 // When this data was last confirmed against the server, so views can date the
-// figures they show instead of presenting a warm start as if it were live.
-// Read through a getter: it changes on every successful fetch, and re-rendering
-// the tree for that would cost more than it is worth. The one caller renders on
-// the online/offline transition, which is exactly when the value is needed.
+// figures they show instead of presenting a warm start as if it were live. It
+// is a getter, not a value: it changes on every successful fetch, and its one
+// caller renders on the online/offline transition anyway.
 const SyncedAtContext = createContext<() => number | null>(() => null)
 export const useLastSyncedAt = () => useContext(SyncedAtContext)()
 
@@ -50,18 +49,27 @@ function CacheRestorer({ cache, onRestored }: { cache: Map<string, SwrState>; on
 }
 
 export function SWRProvider({ children }: { children: React.ReactNode }) {
-  const [cache] = useState(() => new Map<string, SwrState>())
-  const syncedAt = useRef<number | null>(null)
-  const [value] = useState(() => ({
-    provider: () => cache as Cache,
-    onSuccess: () => { syncedAt.current = Date.now() },
-  }))
-  const [getSyncedAt] = useState(() => () => syncedAt.current)
+  // One cache and one clock for the lifetime of the app. Everything CacheRestorer
+  // receives has to be stable, or its effect tears down and re-runs — persisting
+  // and restoring again — on every render.
+  const [store] = useState(() => {
+    const cache = new Map<string, SwrState>()
+    let syncedAt: number | null = null
+    return {
+      cache,
+      config: {
+        provider: () => cache as Cache,
+        onSuccess: () => { syncedAt = Date.now() },
+      },
+      readSyncedAt: () => syncedAt,
+      seedSyncedAt: (at: number | null) => { syncedAt ??= at },
+    }
+  })
 
   return (
-    <SWRConfig value={value}>
-      <SyncedAtContext.Provider value={getSyncedAt}>
-        <CacheRestorer cache={cache} onRestored={at => { syncedAt.current ??= at }} />
+    <SWRConfig value={store.config}>
+      <SyncedAtContext.Provider value={store.readSyncedAt}>
+        <CacheRestorer cache={store.cache} onRestored={store.seedSyncedAt} />
         {children}
       </SyncedAtContext.Provider>
     </SWRConfig>

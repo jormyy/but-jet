@@ -23,7 +23,7 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
   const isEdit = !!transaction
   const [loading, setLoading] = useState(false)
   const { data: categoriesData } = useSWR('categories', fetchCategories)
-  const categories = (categoriesData ?? []) as Category[]
+  const categories = categoriesData ?? []
   const [suggestedCategoryId, setSuggestedCategoryId] = useState<string>('')
 
   const [form, setForm] = useState({
@@ -58,7 +58,7 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
       }
     }, 400)
     return () => clearTimeout(timer)
-  }, [form.merchant])
+  }, [form.merchant, isEdit, supabase])
 
   async function handleCreateCategory(e: React.FormEvent) {
     e.preventDefault()

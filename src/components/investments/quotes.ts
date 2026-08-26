@@ -17,6 +17,6 @@ export async function fetchQuotes(symbols: string[]): Promise<Map<string, Quote>
 }
 
 export async function fetchQuote(symbol: string): Promise<Quote | null> {
-  const quotes = await fetchQuotes([symbol.toUpperCase()])
-  return quotes.get(symbol.toUpperCase()) ?? null
+  const ticker = symbol.toUpperCase()
+  return (await fetchQuotes([ticker])).get(ticker) ?? null
 }

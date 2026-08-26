@@ -37,6 +37,11 @@ describe('persisted SWR cache', () => {
     expect(readPersistedCache(USER_A).savedAt).toBe(1_700_000_000_000)
   })
 
+  it('ignores a cache written in an older format rather than reading it as current', () => {
+    localStorage.setItem(cacheStorageKey(USER_A), JSON.stringify({ v: 0, savedAt: 1, entries: [{ key: 'txns', data: [1] }] }))
+    expect(readPersistedCache(USER_A).entries).toHaveLength(0)
+  })
+
   it('reads back an empty cache rather than throwing on corrupt storage', () => {
     localStorage.setItem(cacheStorageKey(USER_A), '{not json')
     expect(readPersistedCache(USER_A).entries).toHaveLength(0)

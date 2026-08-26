@@ -1,5 +1,12 @@
 import type { InvestmentHolding } from '@/types'
 
+// Only the columns pricing reads, so callers that select a subset (the cron
+// asks for six columns, not the whole row) fit without a cast.
+export type PriceableHolding = Pick<
+  InvestmentHolding,
+  'id' | 'ticker' | 'shares' | 'last_price' | 'current_value' | 'value_date'
+>
+
 export interface PriceUpdate {
   id: string
   last_price: number
@@ -9,7 +16,7 @@ export interface PriceUpdate {
 
 // Symbols worth a quote: a holding without a share count has a value the user
 // typed in, and repricing it would overwrite that.
-export function tickersToPrice(holdings: InvestmentHolding[]): string[] {
+export function tickersToPrice(holdings: PriceableHolding[]): string[] {
   const seen = new Set<string>()
   for (const h of holdings) {
     if (h.ticker && h.shares) seen.add(h.ticker.toUpperCase())
@@ -21,7 +28,7 @@ export function tickersToPrice(holdings: InvestmentHolding[]): string[] {
 // every refresh, including the overwhelmingly common case where the quote came
 // back identical to the one already stored.
 export function pricedUpdates(
-  holdings: InvestmentHolding[],
+  holdings: PriceableHolding[],
   prices: Map<string, number>,
   today: string,
 ): PriceUpdate[] {
