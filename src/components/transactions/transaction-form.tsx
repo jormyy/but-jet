@@ -9,6 +9,7 @@ import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { BUCKET_LABELS, localDateString, transactionDelta } from '@/lib/utils'
 import { CATEGORY_COLORS as COLORS } from '@/lib/colors'
+import { ColorPicker } from './color-picker'
 import { adjustAccountBalance, fetchCategories } from '@/lib/data'
 
 interface TransactionFormProps {
@@ -235,40 +236,19 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
             <option value="spending">Spending</option>
             <option value="savings">Savings</option>
           </Select>
-          <div>
-            <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Color</label>
-            <div className="flex flex-wrap gap-2 mt-1.5">
-              {COLORS.map(c => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setNewCat(n => ({ ...n, color: c }))}
-                  className="w-6 h-6 rounded-full transition-transform hover:scale-110"
-                  style={{
-                    background: c,
-                    outline: newCat.color === c ? `2px solid ${c}` : 'none',
-                    outlineOffset: 2,
-                  }}
-                />
-              ))}
-            </div>
-          </div>
+          <ColorPicker value={newCat.color} onChange={color => setNewCat(n => ({ ...n, color }))} />
           <div className="flex gap-2">
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={() => { setShowNewCat(false); setNewCat({ name: '', bucket: 'spending', color: COLORS[0] }) }}
-              className="flex-1 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 text-sm text-zinc-500"
+              className="flex-1"
             >
               Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleCreateCategory}
-              disabled={savingCat || !newCat.name}
-              className="flex-1 py-2 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-sm font-medium text-white dark:text-zinc-900 disabled:opacity-40"
-            >
+            </Button>
+            <Button type="button" onClick={handleCreateCategory} disabled={savingCat || !newCat.name} className="flex-1">
               {savingCat ? 'Saving…' : 'Create'}
-            </button>
+            </Button>
           </div>
         </div>
       )}

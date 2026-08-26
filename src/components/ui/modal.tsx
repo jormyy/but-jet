@@ -1,6 +1,5 @@
 'use client'
 
-import { cn } from '@/lib/utils'
 import { X } from 'lucide-react'
 import { ReactNode, useId, useRef } from 'react'
 import { useModalBehaviour } from '@/hooks/use-modal-behaviour'
@@ -10,10 +9,9 @@ interface ModalProps {
   onClose: () => void
   title: string
   children: ReactNode
-  className?: string
 }
 
-export function Modal({ open, onClose, title, children, className }: ModalProps) {
+export function Modal({ open, onClose, title, children }: ModalProps) {
   const panel = useRef<HTMLDivElement>(null)
   const titleId = useId()
   useModalBehaviour({ open, onClose, panelRef: panel })
@@ -28,12 +26,9 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={cn(
-          // dvh, not vh: iOS measures vh against the largest viewport, so a
-          // sheet sized in vh runs under the browser chrome and the keyboard.
-          'relative w-full sm:max-w-md bg-white dark:bg-zinc-900 rounded-t-2xl sm:rounded-2xl shadow-xl z-10 max-h-[90dvh] overflow-y-auto',
-          className
-        )}
+        // dvh, not vh: iOS measures vh against the largest viewport, so a sheet
+        // sized in vh runs under the browser chrome and the keyboard.
+        className="relative w-full sm:max-w-md bg-white dark:bg-zinc-900 rounded-t-2xl sm:rounded-2xl shadow-xl z-10 max-h-[90dvh] overflow-y-auto"
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100 dark:border-zinc-800">
           <h2 id={titleId} className="font-semibold text-zinc-900 dark:text-zinc-100">{title}</h2>
