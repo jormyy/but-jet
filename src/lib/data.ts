@@ -36,6 +36,7 @@ export async function adjustAccountBalance(delta: number, account: string = 'Che
     return
   }
   mutate?.('snapshots')
+  mutate?.('snapshot-latest')
 }
 
 export async function fetchBills() {
@@ -108,13 +109,30 @@ export async function fetchGoals() {
   return data ?? []
 }
 
-export async function fetchSnapshots() {
+// The history chart only plots date against total. Selecting whole rows pulled
+// both JSONB columns for every day ever recorded -- 249 KB for two years of
+// daily snapshots, against 31 KB for the two columns the chart draws, and all
+// of it kept in the persisted cache.
+export async function fetchSnapshotSeries() {
   const { data, error } = await supabase()
     .from('net_worth_snapshots')
-    .select('*')
+    .select('date, total')
     .order('date', { ascending: true })
   if (error) throw error
   return data ?? []
+}
+
+// The asset and liability rows the user edits only ever come from the newest
+// snapshot.
+export async function fetchLatestSnapshot() {
+  const { data, error } = await supabase()
+    .from('net_worth_snapshots')
+    .select('*')
+    .order('date', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  return data
 }
 
 export async function fetchInvestments() {
