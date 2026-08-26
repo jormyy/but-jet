@@ -70,6 +70,8 @@ export function SwipeableRow({ onEdit, onDelete, children }: SwipeableRowProps) 
         style={{ width: EDIT_WIDTH }}
       >
         <button
+          tabIndex={-1}
+          aria-hidden="true"
           className="flex flex-col items-center gap-0.5 text-white px-4 h-full w-full justify-center"
           onClick={() => { close(); onEdit() }}
         >
@@ -84,6 +86,8 @@ export function SwipeableRow({ onEdit, onDelete, children }: SwipeableRowProps) 
         style={{ width: DELETE_WIDTH }}
       >
         <button
+          tabIndex={-1}
+          aria-hidden="true"
           className="flex flex-col items-center gap-0.5 text-white px-4 h-full w-full justify-center"
           onClick={() => { close(); onDelete() }}
         >
@@ -101,23 +105,26 @@ export function SwipeableRow({ onEdit, onDelete, children }: SwipeableRowProps) 
       >
         {children}
 
-        {/* Mouse-friendly fallback: touch devices don't fire hover, so this never appears there.
-            Overlaid (not reserved space) so the row content keeps hugging the right edge at rest;
-            the gradient fades the buttons in over the content instead of shifting layout. */}
-        <div className="hidden sm:flex absolute right-0 top-0 bottom-0 items-center gap-1 pl-8 pr-3 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity bg-gradient-to-l from-white dark:from-zinc-900 from-70% to-transparent">
+        {/* The keyboard- and pointer-reachable controls. Overlaid rather than
+            given their own space so the row content keeps hugging the right
+            edge at rest; the gradient fades them in over the content instead of
+            shifting layout. Revealed on hover, on focus (tabbing to a row shows
+            its actions), and always on a touch screen, where hover never fires
+            and swiping is not discoverable. */}
+        <div className="absolute right-0 top-0 bottom-0 flex items-center gap-1 pl-8 pr-3 opacity-0 pointer-events-none transition-opacity bg-gradient-to-l from-white dark:from-zinc-900 from-70% to-transparent group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto pointer-coarse:opacity-100 pointer-coarse:pointer-events-auto">
           <button
             onClick={e => { e.stopPropagation(); onEdit() }}
-            className="p-1.5 rounded-md text-zinc-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10"
+            className="p-2.5 rounded-md text-zinc-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500"
             aria-label="Edit"
           >
-            <Pencil size={14} />
+            <Pencil size={16} />
           </button>
           <button
             onClick={e => { e.stopPropagation(); onDelete() }}
-            className="p-1.5 rounded-md text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
+            className="p-2.5 rounded-md text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500"
             aria-label="Delete"
           >
-            <Trash2 size={14} />
+            <Trash2 size={16} />
           </button>
         </div>
       </div>
