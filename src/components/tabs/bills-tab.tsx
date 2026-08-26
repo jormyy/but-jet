@@ -2,10 +2,11 @@
 
 import useSWR, { useSWRConfig } from 'swr'
 import { createClient } from '@/lib/supabase/client'
-import { fetchBills } from '@/lib/data'
+import { fetchBills, fetchCategories } from '@/lib/data'
 import { RecurringBill, Category, Bucket } from '@/types'
 import { formatCurrency, monthlyAmount, BUCKET_LABELS, localDateString } from '@/lib/utils'
 import { Modal } from '@/components/ui/modal'
+import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -16,12 +17,15 @@ import { cn } from '@/lib/utils'
 export function BillsTab() {
   const supabase = createClient()
   const { mutate } = useSWRConfig()
-  const { data } = useSWR('bills', fetchBills)
-  const bills = (data?.bills ?? []) as RecurringBill[]
-  const categories = (data?.categories ?? []) as Category[]
+  const { data: billsData } = useSWR('bills', fetchBills)
+  const { data: categoriesData } = useSWR('categories', fetchCategories)
+  const bills = billsData ?? []
+  const categories = categoriesData ?? []
 
   const [addOpen, setAddOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [confirmBill, setConfirmBill] = useState<RecurringBill | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const [form, setForm] = useState({
     name: '',
     amount: '',
@@ -34,7 +38,10 @@ export function BillsTab() {
     e.preventDefault()
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) {
+      setLoading(false)
+      return
+    }
     await supabase.from('recurring_bills').insert({
       user_id: user.id,
       name: form.name,
@@ -49,8 +56,12 @@ export function BillsTab() {
     mutate('bills')
   }
 
-  async function handleDelete(id: string) {
-    await supabase.from('recurring_bills').delete().eq('id', id)
+  async function handleDelete() {
+    if (!confirmBill) return
+    setDeleting(true)
+    await supabase.from('recurring_bills').delete().eq('id', confirmBill.id)
+    setDeleting(false)
+    setConfirmBill(null)
     mutate('bills')
   }
 
@@ -119,10 +130,11 @@ export function BillsTab() {
                     )}
                   </div>
                   <button
-                    onClick={() => handleDelete(bill.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1 text-zinc-300 hover:text-red-500 transition-all"
+                    onClick={() => setConfirmBill(bill)}
+                    aria-label={`Delete ${bill.name}`}
+                    className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 p-2.5 -m-1 text-zinc-300 hover:text-red-500 transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500"
                   >
-                    <Trash2 size={14} />
+                    <Trash2 size={16} />
                   </button>
                 </div>
               </div>
@@ -130,6 +142,15 @@ export function BillsTab() {
           })}
         </div>
       )}
+
+      <ConfirmDeleteDialog
+        open={!!confirmBill}
+        title="Delete bill?"
+        description={`${confirmBill?.name ?? ''} · ${confirmBill ? formatCurrency(confirmBill.amount) : ''}`}
+        loading={deleting}
+        onCancel={() => setConfirmBill(null)}
+        onConfirm={handleDelete}
+      />
 
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add recurring bill">
         <form onSubmit={handleAdd} className="space-y-4">

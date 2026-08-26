@@ -2,16 +2,17 @@
 
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { formatCurrency } from '@/lib/utils'
+import { CHART_HEIGHT, ChartFrame, TOOLTIP_LABEL_STYLE, TOOLTIP_STYLE } from './chart-frame'
 
 interface SpendingPieProps {
   data: { category: string; amount: number; color: string }[]
 }
 
 export function SpendingPie({ data }: SpendingPieProps) {
-  if (!data.length) return <div className="text-center text-zinc-400 text-sm py-8">No data</div>
+  if (!data.length) return <ChartFrame>No data</ChartFrame>
 
   return (
-    <ResponsiveContainer width="100%" height={220}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
       <PieChart>
         <Pie
           data={data}
@@ -29,7 +30,8 @@ export function SpendingPie({ data }: SpendingPieProps) {
         </Pie>
         <Tooltip
           formatter={(value) => formatCurrency(Number(value))}
-          contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e4e4e7' }}
+          contentStyle={TOOLTIP_STYLE}
+          labelStyle={TOOLTIP_LABEL_STYLE}
         />
       </PieChart>
     </ResponsiveContainer>

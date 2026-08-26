@@ -13,14 +13,3 @@ export const INVESTMENT_CATEGORIES: { value: InvestmentCategory; label: string; 
 export function investmentCategoryMeta(cat: InvestmentCategory) {
   return INVESTMENT_CATEGORIES.find(c => c.value === cat) ?? INVESTMENT_CATEGORIES[INVESTMENT_CATEGORIES.length - 1]
 }
-
-export async function fetchQuote(symbol: string): Promise<{ name: string; price: number } | null> {
-  try {
-    const res = await fetch(`/api/ticker?symbol=${encodeURIComponent(symbol)}`)
-    if (!res.ok) return null
-    const d = await res.json()
-    return d.price != null ? { name: d.name, price: d.price } : null
-  } catch {
-    return null
-  }
-}

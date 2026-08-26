@@ -1,7 +1,6 @@
 'use client'
 
 import useSWR, { useSWRConfig } from 'swr'
-import { createClient } from '@/lib/supabase/client'
 import { fetchTransactions, monthKey } from '@/lib/data'
 import { Transaction } from '@/types'
 import { TransactionList } from '@/components/transactions/transaction-list'
@@ -13,7 +12,6 @@ import { useState } from 'react'
 import { Plus, Settings2 } from 'lucide-react'
 
 export function TransactionsTab() {
-  const supabase = createClient()
   const { mutate } = useSWRConfig()
   const [addOpen, setAddOpen] = useState(false)
   const [catsOpen, setCatsOpen] = useState(false)
@@ -53,14 +51,16 @@ export function TransactionsTab() {
       <div className="flex items-center gap-3">
         <button
           onClick={() => setMonthOffset(o => o + 1)}
-          className="text-sm text-zinc-400 hover:text-zinc-600 px-2"
+          aria-label="Previous month"
+          className="text-sm text-zinc-400 hover:text-zinc-600 px-3 py-2 -my-1 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500"
         >
           ←
         </button>
         <span className="text-sm font-medium text-zinc-600 dark:text-zinc-300 flex-1 text-center">{monthLabel}</span>
         <button
           onClick={() => setMonthOffset(o => Math.max(0, o - 1))}
-          className="text-sm text-zinc-400 hover:text-zinc-600 px-2 disabled:opacity-30"
+          aria-label="Next month"
+          className="text-sm text-zinc-400 hover:text-zinc-600 px-3 py-2 -my-1 rounded-lg disabled:opacity-30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500"
           disabled={monthOffset === 0}
         >
           →
@@ -68,7 +68,7 @@ export function TransactionsTab() {
       </div>
 
       <TransactionList
-        transactions={(transactions ?? []) as Transaction[]}
+        transactions={transactions ?? []}
         onDelete={refresh}
         onEdit={setEditingTransaction}
       />

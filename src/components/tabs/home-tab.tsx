@@ -2,39 +2,30 @@
 
 import { useDeferredValue } from 'react'
 import useSWR from 'swr'
-import {
-  fetchBills,
-  fetchTransactions,
-  fetchCashflow,
-  currentMonthKey,
-  monthKey,
-} from '@/lib/data'
+import { fetchBills, fetchCategories, fetchTransactions, fetchCashflow, currentMonthKey } from '@/lib/data'
 import { getMonthLabel, monthlyAmount, BUCKET_COLORS } from '@/lib/utils'
 import { DashboardClient } from '@/components/dashboard/dashboard-client'
-import { Transaction, RecurringBill, Category } from '@/types'
 
 export function HomeTab() {
   const mk = currentMonthKey()
-  const prevMk = monthKey(1)
   const { data: billsData } = useSWR('bills', fetchBills)
-  const { data: txns } = useSWR(['txns', mk], ([, key]) => fetchTransactions(key as string))
-  const { data: prevTxns } = useSWR(['txns', prevMk], ([, key]) => fetchTransactions(key as string))
+  const { data: categoriesData } = useSWR('categories', fetchCategories)
+  const { data: txns, isLoading: txnsLoading } = useSWR(['txns', mk], ([, key]) => fetchTransactions(key as string))
   const { data: cashflowData } = useSWR('cashflow', fetchCashflow)
 
-  const bills = (billsData?.bills ?? []) as RecurringBill[]
-  const categories = (billsData?.categories ?? []) as Category[]
-  const transactions = (txns ?? []) as Transaction[]
-  const previousTransactions = (prevTxns ?? []) as Transaction[]
+  const bills = billsData ?? []
+  const categories = categoriesData ?? []
+  const transactions = txns ?? []
 
   const incomeThisMonth = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
   const expensesThisMonth = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
   const savingsThisMonth = transactions.filter(t => t.type === 'savings').reduce((s, t) => s + t.amount, 0)
   const committedBills = bills.filter(b => b.active).reduce((s, b) => s + monthlyAmount(b.amount, b.frequency), 0)
 
-  const lastMonthIncome = previousTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
-  const lastMonthExpenses = previousTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
-  const lastMonthSavings = previousTransactions.filter(t => t.type === 'savings').reduce((s, t) => s + t.amount, 0)
-  const lastMonthLeftover = lastMonthIncome - lastMonthExpenses - lastMonthSavings
+  // Last month's totals already come back with the six-month cash flow, so
+  // there is no reason to fetch that month's transactions a second time.
+  const lastMonth = cashflowData?.[cashflowData.length - 2]
+  const lastMonthLeftover = lastMonth ? lastMonth.income - lastMonth.expenses - lastMonth.savings : 0
 
   const remainingSpendable = lastMonthLeftover - expensesThisMonth - savingsThisMonth
   const savingsRate = lastMonthLeftover === 0 ? Infinity : (savingsThisMonth / lastMonthLeftover) * 100
@@ -74,6 +65,7 @@ export function HomeTab() {
       savingsRate={savingsRate}
       spendingByCategory={deferredSpendingByCategory}
       cashflowData={deferredCashflowData}
+      showBreakdown={txnsLoading || spendingByCategory.length > 0}
     />
   )
 }

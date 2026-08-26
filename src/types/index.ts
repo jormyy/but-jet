@@ -11,13 +11,6 @@ export interface Category {
   created_at: string
 }
 
-export interface MerchantCategory {
-  id: string
-  user_id: string
-  merchant: string
-  category_id: string | null
-}
-
 export interface Transaction {
   id: string
   user_id: string
@@ -79,14 +72,4 @@ export interface InvestmentHolding {
   current_value: number
   value_date: string
   created_at: string
-}
-
-export interface DashboardStats {
-  incomeThisMonth: number
-  expensesThisMonth: number
-  savingsThisMonth: number
-  committedBills: number
-  remainingSpendable: number
-  savingsRate: number
-  spendingByCategory: { category: string; amount: number; bucket: Bucket; color: string }[]
 }
