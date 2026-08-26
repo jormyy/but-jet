@@ -38,8 +38,13 @@ describe('pricedUpdates', () => {
     expect(rows).toEqual([])
   })
 
-  it('still writes an unchanged price when the value is stale for today', () => {
-    const rows = pricedUpdates([holding({ last_price: 100, current_value: 999, value_date: '2026-08-24' })], new Map([['VOO', 100]]), today)
+  it("restamps a holding whose price and value are unchanged but whose date is yesterday's", () => {
+    const rows = pricedUpdates([holding({ shares: 10, last_price: 100, current_value: 1000, value_date: '2026-08-24' })], new Map([['VOO', 100]]), today)
+    expect(rows).toEqual([{ id: 'h1', last_price: 100, current_value: 1000, value_date: today }])
+  })
+
+  it('writes a holding whose stored value disagrees with the quote', () => {
+    const rows = pricedUpdates([holding({ shares: 10, last_price: 100, current_value: 999, value_date: today })], new Map([['VOO', 100]]), today)
     expect(rows).toEqual([{ id: 'h1', last_price: 100, current_value: 1000, value_date: today }])
   })
 
