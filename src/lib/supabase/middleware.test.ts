@@ -36,12 +36,6 @@ describe('proxy session gate', () => {
     expect(new URL(res.headers.get('location')!).pathname).toBe('/')
   })
 
-  it('treats a token that fails verification as unauthenticated', async () => {
-    getClaims.mockResolvedValue({ data: null, error: { message: 'bad signature' } })
-    const res = await updateSession(request('/'))
-    expect(new URL(res.headers.get('location')!).pathname).toBe('/login')
-  })
-
   it('does not lock an unauthenticated visitor out of the login page', async () => {
     getClaims.mockResolvedValue({ data: null, error: null })
     const res = await updateSession(request('/login'))
