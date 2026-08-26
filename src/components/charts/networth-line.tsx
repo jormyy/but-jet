@@ -2,6 +2,7 @@
 
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { formatCurrency } from '@/lib/utils'
+import { AXIS_TICK, CHART_HEIGHT, ChartFrame, TOOLTIP_LABEL_STYLE, TOOLTIP_STYLE } from './chart-frame'
 
 interface NetWorthLineProps {
   data: { date: string; total: number }[]
@@ -26,14 +27,14 @@ function EdgeAwareTick({ x, y, index, visibleTicksCount, payload }: EdgeAwareTic
 }
 
 export function NetWorthLine({ data, sparseTicks }: NetWorthLineProps) {
-  if (!data.length) return <div className="text-center text-zinc-400 text-sm py-8">No snapshots yet</div>
+  if (!data.length) return <ChartFrame>No snapshots yet</ChartFrame>
 
   const ticks = sparseTicks && data.length > 2
     ? [data[0].date, data[Math.floor((data.length - 1) / 2)].date, data[data.length - 1].date]
     : undefined
 
   return (
-    <ResponsiveContainer width="100%" height={220}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
       <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" vertical={false} />
         <XAxis
@@ -46,21 +47,15 @@ export function NetWorthLine({ data, sparseTicks }: NetWorthLineProps) {
         />
         <YAxis
           tickFormatter={(v) => `$${v >= 1000 ? `${(v/1000).toFixed(0)}k` : v}`}
-          tick={{ fontSize: 11, fill: 'var(--chart-tick)' }}
+          tick={AXIS_TICK}
           axisLine={false}
           tickLine={false}
           width={45}
         />
         <Tooltip
           formatter={(value) => formatCurrency(Number(value))}
-          contentStyle={{
-            fontSize: 12,
-            borderRadius: 8,
-            border: '1px solid var(--chart-tooltip-border)',
-            background: 'var(--chart-tooltip-bg)',
-            color: 'var(--chart-tooltip-text)',
-          }}
-          labelStyle={{ color: 'var(--chart-tooltip-text)' }}
+          contentStyle={TOOLTIP_STYLE}
+          labelStyle={TOOLTIP_LABEL_STYLE}
         />
         <Line
           type="monotone"

@@ -11,7 +11,7 @@ export function HomeTab() {
   const mk = currentMonthKey()
   const { data: billsData } = useSWR('bills', fetchBills)
   const { data: categoriesData } = useSWR('categories', fetchCategories)
-  const { data: txns } = useSWR(['txns', mk], ([, key]) => fetchTransactions(key as string))
+  const { data: txns, isLoading: txnsLoading } = useSWR(['txns', mk], ([, key]) => fetchTransactions(key as string))
   const { data: cashflowData } = useSWR('cashflow', fetchCashflow)
 
   const bills = (billsData ?? []) as RecurringBill[]
@@ -66,6 +66,7 @@ export function HomeTab() {
       savingsRate={savingsRate}
       spendingByCategory={deferredSpendingByCategory}
       cashflowData={deferredCashflowData}
+      showBreakdown={txnsLoading || spendingByCategory.length > 0}
     />
   )
 }

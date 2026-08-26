@@ -5,7 +5,8 @@ import { createClient } from '@/lib/supabase/client'
 import { fetchSnapshots, fetchInvestments } from '@/lib/data'
 import { NetWorthSnapshot, InvestmentHolding } from '@/types'
 import { formatCurrency, formatDate, localDateString } from '@/lib/utils'
-import { NetWorthLine } from '@/components/charts/networth-line'
+import dynamic from 'next/dynamic'
+import { ChartFrame } from '@/components/charts/chart-frame'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,6 +20,8 @@ type EntryType = 'asset' | 'liability'
 
 const ASSET_NAME_SUGGESTIONS = ['Checking', 'Savings', 'Cash']
 const LIABILITY_NAME_SUGGESTIONS = ['Credit card', 'Student loan', 'Mortgage', 'Auto loan']
+
+const NetWorthLine = dynamic(() => import('@/components/charts/networth-line').then(m => ({ default: m.NetWorthLine })), { loading: () => <ChartFrame /> })
 
 const RANGES = ['1M', 'YTD', '1Y', '3Y', 'All'] as const
 type Range = typeof RANGES[number]
