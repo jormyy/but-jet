@@ -7,6 +7,8 @@ interface CashflowBarProps {
   data: { month: string; income: number; expenses: number; savings: number }[]
 }
 
+const LEGEND_ORDER = ['Income', 'Expenses', 'Savings']
+
 export function CashflowBar({ data }: CashflowBarProps) {
   if (!data.length) return <div className="text-center text-zinc-400 text-sm py-8">No data</div>
 
@@ -19,7 +21,10 @@ export function CashflowBar({ data }: CashflowBarProps) {
           formatter={(value) => formatCurrency(Number(value))}
           contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e4e4e7' }}
         />
-        <Legend wrapperStyle={{ fontSize: 11 }} />
+        <Legend
+          wrapperStyle={{ fontSize: 11 }}
+          itemSorter={(item) => LEGEND_ORDER.indexOf(String(item.value))}
+        />
         <Bar dataKey="income" fill="#22c55e" name="Income" radius={[3, 3, 0, 0]} />
         <Bar dataKey="expenses" fill="#f97316" name="Expenses" radius={[3, 3, 0, 0]} />
         <Bar dataKey="savings" fill="#3b82f6" name="Savings" radius={[3, 3, 0, 0]} />
