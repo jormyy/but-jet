@@ -39,6 +39,7 @@ export function DashboardClient({
   const [addOpen, setAddOpen] = useState(false)
   const supabase = createClient()
   const { mutate } = useSWRConfig()
+  const totalSpending = spendingByCategory.reduce((sum, c) => sum + c.amount, 0)
 
   async function handleSignOut() {
     await supabase.auth.signOut()
@@ -108,6 +109,7 @@ export function DashboardClient({
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: c.color }} />
                   <span className="text-zinc-600 dark:text-zinc-400">{c.category}</span>
+                  <span className="text-xs text-zinc-400 dark:text-zinc-500">{((c.amount / totalSpending) * 100).toFixed(0)}%</span>
                 </div>
                 <span className="font-medium text-zinc-900 dark:text-zinc-100">{formatCurrency(c.amount)}</span>
               </div>
