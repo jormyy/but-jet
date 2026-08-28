@@ -6,7 +6,6 @@ import { fetchGoals } from '@/lib/data'
 import { Goal } from '@/types'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Modal } from '@/components/ui/modal'
-import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useState } from 'react'
@@ -16,12 +15,10 @@ export function GoalsTab() {
   const supabase = createClient()
   const { mutate } = useSWRConfig()
   const { data } = useSWR('goals', fetchGoals)
-  const goals = data ?? []
+  const goals = (data ?? []) as Goal[]
 
   const [addOpen, setAddOpen] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [confirmGoal, setConfirmGoal] = useState<Goal | null>(null)
-  const [deleting, setDeleting] = useState(false)
   const [form, setForm] = useState({
     name: '',
     target_amount: '',
@@ -33,10 +30,7 @@ export function GoalsTab() {
     e.preventDefault()
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      setLoading(false)
-      return
-    }
+    if (!user) return
     await supabase.from('goals').insert({
       user_id: user.id,
       name: form.name,
@@ -58,12 +52,8 @@ export function GoalsTab() {
     mutate('goals')
   }
 
-  async function handleDelete() {
-    if (!confirmGoal) return
-    setDeleting(true)
-    await supabase.from('goals').delete().eq('id', confirmGoal.id)
-    setDeleting(false)
-    setConfirmGoal(null)
+  async function handleDelete(id: string) {
+    await supabase.from('goals').delete().eq('id', id)
     mutate('goals')
   }
 
@@ -94,11 +84,10 @@ export function GoalsTab() {
                     )}
                   </div>
                   <button
-                    onClick={() => setConfirmGoal(goal)}
-                    aria-label={`Delete ${goal.name}`}
-                    className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 p-2.5 -m-1 text-zinc-300 hover:text-red-500 transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-500"
+                    onClick={() => handleDelete(goal.id)}
+                    className="opacity-0 group-hover:opacity-100 p-1 text-zinc-300 hover:text-red-500 transition-all"
                   >
-                    <Trash2 size={16} />
+                    <Trash2 size={14} />
                   </button>
                 </div>
 
@@ -132,15 +121,6 @@ export function GoalsTab() {
           })}
         </div>
       )}
-
-      <ConfirmDeleteDialog
-        open={!!confirmGoal}
-        title="Delete goal?"
-        description={`${confirmGoal?.name ?? ''} · ${confirmGoal ? formatCurrency(confirmGoal.target_amount) : ''}`}
-        loading={deleting}
-        onCancel={() => setConfirmGoal(null)}
-        onConfirm={handleDelete}
-      />
 
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add goal">
         <form onSubmit={handleAdd} className="space-y-4">

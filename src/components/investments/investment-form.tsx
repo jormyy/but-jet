@@ -6,8 +6,7 @@ import { InvestmentHolding, InvestmentCategory } from '@/types'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, localDateString } from '@/lib/utils'
-import { INVESTMENT_CATEGORIES } from './categories'
-import { fetchQuote } from './quotes'
+import { INVESTMENT_CATEGORIES, fetchQuote } from './categories'
 
 interface InvestmentFormProps {
   onSuccess: () => void
@@ -85,10 +84,7 @@ export function InvestmentForm({ onSuccess, investment }: InvestmentFormProps) {
     }
 
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      setLoading(false)
-      return
-    }
+    if (!user) return
 
     const { error } = await supabase.from('investment_holdings').insert({ user_id: user.id, ...payload })
 

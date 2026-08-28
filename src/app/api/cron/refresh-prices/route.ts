@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchYahooQuote } from '@/lib/quotes'
-import { pricedUpdates, tickersToPrice } from '@/lib/prices'
 
 export async function GET(req: NextRequest) {
   const auth = req.headers.get('authorization')
@@ -12,34 +11,40 @@ export async function GET(req: NextRequest) {
   const supabase = createAdminClient()
   const { data: holdings, error } = await supabase
     .from('investment_holdings')
-    .select('id, ticker, shares, last_price, current_value, value_date')
+    .select('id, ticker, shares')
     .not('ticker', 'is', null)
     .not('shares', 'is', null)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const rows = holdings ?? []
-  const tickers = tickersToPrice(rows)
-  const prices = new Map<string, number>()
-  const failed: string[] = []
-
+  const tickers = [...new Set((holdings ?? []).map(h => h.ticker!.toUpperCase()))]
+  const quotes = new Map<string, { name: string; price: number } | null>()
   await Promise.all(tickers.map(async ticker => {
-    const quote = await fetchYahooQuote(ticker)
-    if (quote) prices.set(ticker, quote.price)
-    else failed.push(ticker)
+    quotes.set(ticker, await fetchYahooQuote(ticker))
   }))
 
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date())
-  // Shared with the investments tab, so both skip holdings whose price has not
-  // moved instead of rewriting every row on every run.
-  const updates = pricedUpdates(rows, prices, today)
+  let updated = 0
+  const failed: string[] = []
 
-  const results = await Promise.all(updates.map(u =>
-    supabase.from('investment_holdings')
-      .update({ last_price: u.last_price, current_value: u.current_value, value_date: u.value_date })
-      .eq('id', u.id)
-  ))
-  const writeErrors = results.filter(r => r.error).length
+  for (const h of holdings ?? []) {
+    const quote = quotes.get(h.ticker!.toUpperCase())
+    if (!quote) {
+      failed.push(h.ticker!)
+      continue
+    }
+    const { error: updateError } = await supabase.from('investment_holdings').update({
+      last_price: quote.price,
+      current_value: Math.round(h.shares! * quote.price * 100) / 100,
+      value_date: today,
+    }).eq('id', h.id)
 
-  return NextResponse.json({ priced: tickers.length, updated: updates.length - writeErrors, unchanged: rows.length - updates.length, failed, writeErrors })
+    if (updateError) {
+      console.error(`Price update failed for holding ${h.id}:`, updateError.message)
+      continue
+    }
+    updated++
+  }
+
+  return NextResponse.json({ updated, failed: [...new Set(failed)], total: holdings?.length ?? 0 })
 }

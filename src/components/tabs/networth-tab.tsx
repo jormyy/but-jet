@@ -2,10 +2,10 @@
 
 import useSWR, { useSWRConfig } from 'swr'
 import { createClient } from '@/lib/supabase/client'
-import { fetchSnapshotSeries, fetchLatestSnapshot, fetchInvestments } from '@/lib/data'
-import { formatCurrency, formatDate, localDateString, netWorthTotal } from '@/lib/utils'
-import dynamic from 'next/dynamic'
-import { ChartFrame } from '@/components/charts/chart-frame'
+import { fetchSnapshots, fetchInvestments } from '@/lib/data'
+import { NetWorthSnapshot, InvestmentHolding } from '@/types'
+import { formatCurrency, formatDate, localDateString } from '@/lib/utils'
+import { NetWorthLine } from '@/components/charts/networth-line'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,8 +19,6 @@ type EntryType = 'asset' | 'liability'
 
 const ASSET_NAME_SUGGESTIONS = ['Checking', 'Savings', 'Cash']
 const LIABILITY_NAME_SUGGESTIONS = ['Credit card', 'Student loan', 'Mortgage', 'Auto loan']
-
-const NetWorthLine = dynamic(() => import('@/components/charts/networth-line').then(m => ({ default: m.NetWorthLine })), { loading: () => <ChartFrame /> })
 
 const RANGES = ['1M', 'YTD', '1Y', '3Y', 'All'] as const
 type Range = typeof RANGES[number]
@@ -39,11 +37,10 @@ function rangeCutoff(range: Range): Date | null {
 export function NetWorthTab() {
   const supabase = createClient()
   const { mutate } = useSWRConfig()
-  const { data } = useSWR('snapshots', fetchSnapshotSeries)
-  const series = data ?? []
-  const { data: latest } = useSWR('snapshot-latest', fetchLatestSnapshot)
+  const { data } = useSWR('snapshots', fetchSnapshots)
+  const snapshots = (data ?? []) as NetWorthSnapshot[]
   const { data: investmentsData } = useSWR('investments', fetchInvestments)
-  const holdings = investmentsData ?? []
+  const holdings = (investmentsData ?? []) as InvestmentHolding[]
 
   const [addOpen, setAddOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -57,8 +54,6 @@ export function NetWorthTab() {
   const [editValue, setEditValue] = useState('')
   const [confirmEntry, setConfirmEntry] = useState<{ type: EntryType; name: string; value: number } | null>(null)
   const [entryLoading, setEntryLoading] = useState(false)
-
-  const refreshSnapshots = () => { mutate('snapshots'); mutate('snapshot-latest') }
 
   function addRow(setter: typeof setAssets) {
     setter(rows => [...rows, { name: '', value: '' }])
@@ -90,10 +85,7 @@ export function NetWorthTab() {
     e.preventDefault()
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      setLoading(false)
-      return
-    }
+    if (!user) return
 
     const assetsMap: Record<string, number> = {}
     for (const a of assets.filter(a => a.name && a.value)) {
@@ -106,19 +98,21 @@ export function NetWorthTab() {
     for (const l of liabilities.filter(l => l.name && l.value)) {
       liabMap[l.name] = parseFloat(l.value)
     }
+    const totalAssets = Object.values(assetsMap).reduce((s, v) => s + v, 0)
+    const totalLiab = Object.values(liabMap).reduce((s, v) => s + v, 0)
 
     await supabase.from('net_worth_snapshots').upsert({
       user_id: user.id,
       date,
       assets: assetsMap,
       liabilities: liabMap,
-      total: netWorthTotal(assetsMap, liabMap),
+      total: totalAssets - totalLiab,
     }, { onConflict: 'user_id,date' })
     setLoading(false)
     setAddOpen(false)
     setAssets([{ name: '', value: '' }])
     setLiabilities([{ name: '', value: '' }])
-    refreshSnapshots()
+    mutate('snapshots')
   }
 
   function openEditEntry(type: EntryType, name: string, value: number) {
@@ -136,11 +130,11 @@ export function NetWorthTab() {
     const targetMap = editingEntry.type === 'asset' ? assetsMap : liabMap
     delete targetMap[editingEntry.name]
     targetMap[editName] = parseFloat(editValue)
-    const total = netWorthTotal(assetsMap, liabMap)
+    const total = Object.values(assetsMap).reduce((s, v) => s + v, 0) - Object.values(liabMap).reduce((s, v) => s + v, 0)
     await supabase.from('net_worth_snapshots').update({ assets: assetsMap, liabilities: liabMap, total }).eq('id', latest.id)
     setEntryLoading(false)
     setEditingEntry(null)
-    refreshSnapshots()
+    mutate('snapshots')
   }
 
   async function handleDeleteEntry() {
@@ -150,14 +144,15 @@ export function NetWorthTab() {
     const liabMap = { ...latest.liabilities }
     const targetMap = confirmEntry.type === 'asset' ? assetsMap : liabMap
     delete targetMap[confirmEntry.name]
-    const total = netWorthTotal(assetsMap, liabMap)
+    const total = Object.values(assetsMap).reduce((s, v) => s + v, 0) - Object.values(liabMap).reduce((s, v) => s + v, 0)
     await supabase.from('net_worth_snapshots').update({ assets: assetsMap, liabilities: liabMap, total }).eq('id', latest.id)
     setEntryLoading(false)
     setConfirmEntry(null)
-    refreshSnapshots()
+    mutate('snapshots')
   }
 
   const portfolioTotal = holdings.reduce((s, h) => s + h.current_value, 0)
+  const latest = snapshots[snapshots.length - 1]
 
   const displayAssets = { ...(latest?.assets ?? {}) }
   if (portfolioTotal > 0) {
@@ -165,11 +160,13 @@ export function NetWorthTab() {
   } else {
     delete displayAssets['Investments']
   }
-  const displayTotal = latest ? netWorthTotal(displayAssets, latest.liabilities) : 0
+  const displayTotal = latest
+    ? Object.values(displayAssets).reduce((s, v) => s + v, 0) - Object.values(latest.liabilities).reduce((s, v) => s + v, 0)
+    : 0
 
   const cutoff = rangeCutoff(range)
-  const ranged = cutoff ? series.filter(s => new Date(s.date + 'T00:00:00') >= cutoff) : series
-  const chartData = ranged.map(s => ({
+  const rangedSnapshots = cutoff ? snapshots.filter(s => new Date(s.date + 'T00:00:00') >= cutoff) : snapshots
+  const chartData = rangedSnapshots.map(s => ({
     date: new Date(s.date + 'T00:00:00').toLocaleDateString('en-US', range === '1M' ? { month: 'short', day: 'numeric' } : { month: 'short', year: 'numeric' }),
     total: s.total,
   }))

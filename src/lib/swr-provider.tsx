@@ -1,77 +1,58 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState } from 'react'
-import { SWRConfig, useSWRConfig, unstable_serialize, type Cache } from 'swr'
-import { readUserIdFromCookie } from '@/lib/supabase/session-cookie'
-import { readPersistedCache, writePersistedCache, type SwrState } from '@/lib/swr-cache'
+import { useEffect, useState } from 'react'
+import { SWRConfig, type Cache } from 'swr'
 
-// When this data was last confirmed against the server, so views can date the
-// figures they show instead of presenting a warm start as if it were live. It
-// is a getter, not a value: it changes on every successful fetch, and its one
-// caller renders on the online/offline transition anyway.
-const SyncedAtContext = createContext<() => number | null>(() => null)
-export const useLastSyncedAt = () => useContext(SyncedAtContext)()
+const STORAGE_KEY = 'but-jet-swr-cache'
 
-// The cache is restored through `mutate` after mount rather than by swapping in
-// a pre-filled provider. Swapping the provider remounts SWRConfig, which throws
-// away every in-flight request and refetches the lot — the app used to issue
-// each query exactly twice on launch for that reason.
-function CacheRestorer({ cache, onRestored }: { cache: Map<string, SwrState>; onRestored: (savedAt: number | null) => void }) {
-  const { mutate } = useSWRConfig()
+function emptyCache(): Cache {
+  return new Map()
+}
 
-  useEffect(() => {
-    const userId = readUserIdFromCookie(document.cookie)
-    if (!userId) return
+function localStorageProvider(): Cache {
+  let entries: [string, unknown][] = []
+  try {
+    entries = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]')
+  } catch {
+    entries = []
+  }
+  const map = new Map(entries)
 
-    const { entries, savedAt } = readPersistedCache(userId)
-    for (const { key, data } of entries) {
-      if (cache.get(unstable_serialize(key))?.data !== undefined) continue
-      mutate(key, data, { revalidate: false })
+  const persist = () => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(map.entries())))
+    } catch {
+      // storage full or unavailable — cached data just won't persist this time
     }
-    onRestored(savedAt)
+  }
 
-    const persist = () => writePersistedCache(userId, cache)
-    // As a PWA this is closed by swiping it away or switching apps far more
-    // often than by a real page unload, and neither fires `beforeunload` on iOS
-    // or Android. `visibilitychange`/`pagehide` fire the moment the app is
-    // backgrounded, before the OS gets a chance to kill it outright.
-    const onHide = () => { if (document.visibilityState === 'hidden') persist() }
-    document.addEventListener('visibilitychange', onHide)
-    window.addEventListener('pagehide', persist)
-    return () => {
-      persist()
-      document.removeEventListener('visibilitychange', onHide)
-      window.removeEventListener('pagehide', persist)
-    }
-  }, [cache, mutate, onRestored])
+  // As a PWA, this gets closed by swiping it away or switching apps far more
+  // often than by an actual page unload — and on iOS/Android that never
+  // fires `beforeunload`, so a handler that only saves there was silently
+  // never persisting. Every reopen started from an empty cache, so the app
+  // waited on a full network refetch instead of showing stale data while it
+  // revalidated. `visibilitychange`/`pagehide` fire the moment the app is
+  // backgrounded, before the OS gets a chance to kill it outright.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') persist()
+  })
+  window.addEventListener('pagehide', persist)
+  window.addEventListener('beforeunload', persist)
 
-  return null
+  return map as Cache
 }
 
 export function SWRProvider({ children }: { children: React.ReactNode }) {
-  // One cache and one clock for the lifetime of the app. Everything CacheRestorer
-  // receives has to be stable, or its effect tears down and re-runs — persisting
-  // and restoring again — on every render.
-  const [store] = useState(() => {
-    const cache = new Map<string, SwrState>()
-    let syncedAt: number | null = null
-    return {
-      cache,
-      config: {
-        provider: () => cache as Cache,
-        onSuccess: () => { syncedAt = Date.now() },
-      },
-      readSyncedAt: () => syncedAt,
-      seedSyncedAt: (at: number | null) => { syncedAt ??= at },
-    }
-  })
+  // The persisted cache can only be read on the client, so the first client
+  // render must also start empty to match the server — otherwise cached
+  // values from a previous visit would hydrate-mismatch against the server's
+  // empty state. Swap in the real cache right after mount instead.
+  const [hydrated, setHydrated] = useState(false)
+  useEffect(() => setHydrated(true), [])
 
   return (
-    <SWRConfig value={store.config}>
-      <SyncedAtContext.Provider value={store.readSyncedAt}>
-        <CacheRestorer cache={store.cache} onRestored={store.seedSyncedAt} />
-        {children}
-      </SyncedAtContext.Provider>
+    <SWRConfig key={hydrated ? 'cached' : 'ssr'} value={{ provider: hydrated ? localStorageProvider : emptyCache }}>
+      {children}
     </SWRConfig>
   )
 }

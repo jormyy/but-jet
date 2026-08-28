@@ -23,22 +23,17 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // getSession() only decodes the cookie, so anything that can set a cookie can
-  // walk past this gate. getClaims() verifies the token's signature; the project
-  // signs with ES256, so it does that against a cached JWKS rather than a round
-  // trip to the auth server on every navigation.
-  const { data } = await supabase.auth.getClaims()
-  const signedIn = !!data?.claims
+  const { data: { session } } = await supabase.auth.getSession()
 
   const isAuthPage = request.nextUrl.pathname.startsWith('/login')
 
-  if (!signedIn && !isAuthPage) {
+  if (!session && !isAuthPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  if (signedIn && isAuthPage) {
+  if (session && isAuthPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)

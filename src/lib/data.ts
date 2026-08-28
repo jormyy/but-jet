@@ -1,56 +1,54 @@
 import type { ScopedMutator } from 'swr'
 import { createClient } from '@/lib/supabase/client'
 import { getMonthRange, localDateString } from '@/lib/utils'
-import type { Category, Goal, InvestmentHolding, NetWorthSnapshot, RecurringBill, Transaction } from '@/types'
 
 const supabase = () => createClient()
 
-// Applies a transaction's effect on an asset balance (e.g. Checking, Cash) to
-// today's net worth snapshot, carrying the previous one forward if today has
-// none yet. The whole read-modify-write happens in one statement: doing it here
-// meant two overlapping writes both started from the same balance and the
-// second discarded the first (20 concurrent adjustments landed as 1).
-//
-// `mutate` must be the context-bound mutator from the caller's useSWRConfig(),
-// since SWRProvider uses a custom cache provider — the module-level `mutate`
-// from 'swr' targets an unrelated cache.
+// Applies a transaction's effect on an asset balance (e.g. Checking, Cash) to the latest net worth
+// snapshot (creating today's snapshot, carried forward from the prior one, if it doesn't exist yet).
+// `mutate` must be the context-bound mutator from the caller's `useSWRConfig()`, since SWRProvider
+// uses a custom cache provider — the module-level `mutate` from 'swr' targets an unrelated cache.
 export async function adjustAccountBalance(delta: number, account: string = 'Checking', mutate?: ScopedMutator) {
   if (delta === 0) return
+  const client = supabase()
+  const { data: { user } } = await client.auth.getUser()
+  if (!user) return
 
-  const { error } = await supabase().rpc('adjust_account_balance', {
-    account,
-    delta,
-    on_date: localDateString(),
-  })
+  const { data: latest } = await client
+    .from('net_worth_snapshots')
+    .select('date, assets, liabilities')
+    .order('date', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const assets: Record<string, number> = { ...(latest?.assets ?? {}) }
+  assets[account] = (assets[account] ?? 0) + delta
+  const liabilities: Record<string, number> = latest?.liabilities ?? {}
+  const total = Object.values(assets).reduce((s, v) => s + v, 0) - Object.values(liabilities).reduce((s, v) => s + v, 0)
+
+  const today = localDateString()
+  const { error } = await client
+    .from('net_worth_snapshots')
+    .upsert({ user_id: user.id, date: today, assets, liabilities, total }, { onConflict: 'user_id,date' })
 
   if (error) {
     console.error('adjustAccountBalance failed:', error.message)
     return
   }
   mutate?.('snapshots')
-  mutate?.('snapshot-latest')
 }
 
-export async function fetchBills(): Promise<RecurringBill[]> {
-  const { data, error } = await supabase()
-    .from('recurring_bills')
-    .select('*, category:categories(*)')
-    .order('next_due_date')
-  if (error) throw error
-  return data ?? []
+export async function fetchBills() {
+  const [{ data: bills, error: billsError }, { data: categories, error: categoriesError }] = await Promise.all([
+    supabase().from('recurring_bills').select('*, category:categories(*)').order('next_due_date'),
+    supabase().from('categories').select('*').order('bucket').order('name'),
+  ])
+  if (billsError) throw billsError
+  if (categoriesError) throw categoriesError
+  return { bills: bills ?? [], categories: categories ?? [] }
 }
 
-export async function fetchCategories(): Promise<Category[]> {
-  const { data, error } = await supabase()
-    .from('categories')
-    .select('*')
-    .order('bucket')
-    .order('name')
-  if (error) throw error
-  return data ?? []
-}
-
-export async function fetchTransactions(monthKey: string): Promise<Transaction[]> {
+export async function fetchTransactions(monthKey: string) {
   // monthKey is 'YYYY-MM'
   const [year, month] = monthKey.split('-').map(Number)
   const d = new Date(year, month - 1, 1)
@@ -95,41 +93,22 @@ export async function fetchCashflow() {
   })
 }
 
-export async function fetchGoals(): Promise<Goal[]> {
+export async function fetchGoals() {
   const { data, error } = await supabase().from('goals').select('*').order('created_at')
   if (error) throw error
   return data ?? []
 }
 
-export type SnapshotPoint = Pick<NetWorthSnapshot, 'date' | 'total'>
-
-// The history chart only plots date against total. Selecting whole rows pulled
-// both JSONB columns for every day ever recorded -- 249 KB for two years of
-// daily snapshots, against 31 KB for the two columns the chart draws, and all
-// of it kept in the persisted cache.
-export async function fetchSnapshotSeries(): Promise<SnapshotPoint[]> {
+export async function fetchSnapshots() {
   const { data, error } = await supabase()
     .from('net_worth_snapshots')
-    .select('date, total')
+    .select('*')
     .order('date', { ascending: true })
   if (error) throw error
   return data ?? []
 }
 
-// The asset and liability rows the user edits only ever come from the newest
-// snapshot.
-export async function fetchLatestSnapshot(): Promise<NetWorthSnapshot | null> {
-  const { data, error } = await supabase()
-    .from('net_worth_snapshots')
-    .select('*')
-    .order('date', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  if (error) throw error
-  return data
-}
-
-export async function fetchInvestments(): Promise<InvestmentHolding[]> {
+export async function fetchInvestments() {
   const { data, error } = await supabase()
     .from('investment_holdings')
     .select('*')

@@ -26,9 +26,6 @@ export default function LoginPage() {
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) setError(error.message)
-      // A full load, not a client navigation: the root providers read the
-      // session cookie on mount to pick the right cached data for this account.
-      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       else window.location.href = '/'
     }
     setLoading(false)

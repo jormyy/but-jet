@@ -1,9 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import useSWR, { useSWRConfig } from 'swr'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { fetchCategories } from '@/lib/data'
 import { Category, Bucket } from '@/types'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -11,17 +9,12 @@ import { Button } from '@/components/ui/button'
 import { Trash2, Pencil } from 'lucide-react'
 import { BUCKET_LABELS } from '@/lib/utils'
 import { CATEGORY_COLORS as COLORS } from '@/lib/colors'
-import { ColorPicker } from './color-picker'
 
 const BUCKETS = ['bills', 'spending', 'savings'] as Bucket[]
 
 export function CategoryManager() {
   const supabase = createClient()
-  const { mutate } = useSWRConfig()
-  // Shared with the bills and home tabs: editing a category here has to show
-  // up in their breakdowns, which it did not while this kept its own copy.
-  const { data } = useSWR('categories', fetchCategories)
-  const categories = data ?? []
+  const [categories, setCategories] = useState<Category[]>([])
   const [name, setName] = useState('')
   const [bucket, setBucket] = useState<Bucket>('spending')
   const [color, setColor] = useState(COLORS[0])
@@ -34,7 +27,12 @@ export function CategoryManager() {
   })
   const [saving, setSaving] = useState(false)
 
-  const reload = () => mutate('categories')
+  async function load() {
+    const { data } = await supabase.from('categories').select('*').order('bucket').order('name')
+    setCategories((data ?? []) as Category[])
+  }
+
+  useEffect(() => { load() }, [])
 
   function startEdit(c: Category) {
     setEditingId(c.id)
@@ -52,7 +50,7 @@ export function CategoryManager() {
       bucket: editDraft.bucket,
       color: editDraft.color,
     }).eq('id', id)
-    await reload()
+    await load()
     setEditingId(null)
     setSaving(false)
   }
@@ -61,18 +59,17 @@ export function CategoryManager() {
     e.preventDefault()
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      await supabase.from('categories').insert({ user_id: user.id, name, bucket, color })
-      setName('')
-      reload()
-    }
+    if (!user) return
+    await supabase.from('categories').insert({ user_id: user.id, name, bucket, color })
+    setName('')
     setLoading(false)
+    load()
   }
 
   async function handleDelete(id: string) {
     await supabase.from('categories').delete().eq('id', id)
     if (editingId === id) setEditingId(null)
-    reload()
+    load()
   }
 
   return (
@@ -103,14 +100,40 @@ export function CategoryManager() {
                       >
                         {BUCKETS.map(bk => <option key={bk} value={bk}>{BUCKET_LABELS[bk]}</option>)}
                       </Select>
-                        <ColorPicker value={editDraft.color} onChange={color => setEditDraft(d => ({ ...d, color }))} />
+                      <div>
+                        <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Color</label>
+                        <div className="flex flex-wrap gap-2 mt-1.5">
+                          {COLORS.map(col => (
+                            <button
+                              key={col}
+                              type="button"
+                              onClick={() => setEditDraft(d => ({ ...d, color: col }))}
+                              className="w-6 h-6 rounded-full transition-transform hover:scale-110"
+                              style={{
+                                background: col,
+                                outline: editDraft.color === col ? `2px solid ${col}` : 'none',
+                                outlineOffset: 2,
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </div>
                       <div className="flex gap-2">
-                        <Button type="button" variant="outline" onClick={cancelEdit} className="flex-1">
+                        <button
+                          type="button"
+                          onClick={cancelEdit}
+                          className="flex-1 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 text-sm text-zinc-500"
+                        >
                           Cancel
-                        </Button>
-                        <Button type="button" onClick={() => handleSaveEdit(c.id)} disabled={saving || !editDraft.name} className="flex-1">
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSaveEdit(c.id)}
+                          disabled={saving || !editDraft.name}
+                          className="flex-1 py-2 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-sm font-medium text-white dark:text-zinc-900 disabled:opacity-40"
+                        >
                           {saving ? 'Saving…' : 'Save'}
-                        </Button>
+                        </button>
                       </div>
                       <button
                         type="button"
@@ -161,7 +184,24 @@ export function CategoryManager() {
         >
           {BUCKETS.map(b => <option key={b} value={b}>{BUCKET_LABELS[b]}</option>)}
         </Select>
-        <ColorPicker value={color} onChange={setColor} />
+        <div>
+          <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Color</label>
+          <div className="flex flex-wrap gap-2 mt-1.5">
+            {COLORS.map(c => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setColor(c)}
+                className="w-6 h-6 rounded-full transition-transform hover:scale-110"
+                style={{
+                  background: c,
+                  outline: color === c ? `2px solid ${c}` : 'none',
+                  outlineOffset: 2,
+                }}
+              />
+            ))}
+          </div>
+        </div>
         <Button type="submit" disabled={loading || !name} className="w-full">
           Add category
         </Button>

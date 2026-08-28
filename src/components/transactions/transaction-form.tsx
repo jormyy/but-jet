@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import useSWR, { useSWRConfig } from 'swr'
+import { useSWRConfig } from 'swr'
 import { createClient } from '@/lib/supabase/client'
 import { Category, Transaction, TransactionType, Bucket } from '@/types'
 import { Input } from '@/components/ui/input'
@@ -9,8 +9,7 @@ import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { BUCKET_LABELS, localDateString, transactionDelta } from '@/lib/utils'
 import { CATEGORY_COLORS as COLORS } from '@/lib/colors'
-import { ColorPicker } from './color-picker'
-import { adjustAccountBalance, fetchCategories } from '@/lib/data'
+import { adjustAccountBalance } from '@/lib/data'
 
 interface TransactionFormProps {
   onSuccess: () => void
@@ -22,8 +21,7 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
   const { mutate } = useSWRConfig()
   const isEdit = !!transaction
   const [loading, setLoading] = useState(false)
-  const { data: categoriesData } = useSWR('categories', fetchCategories)
-  const categories = categoriesData ?? []
+  const [categories, setCategories] = useState<Category[]>([])
   const [suggestedCategoryId, setSuggestedCategoryId] = useState<string>('')
 
   const [form, setForm] = useState({
@@ -41,6 +39,15 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
   const [newCat, setNewCat] = useState({ name: '', bucket: 'spending' as Bucket, color: COLORS[0] })
   const [savingCat, setSavingCat] = useState(false)
 
+  async function loadCategories() {
+    const { data } = await supabase.from('categories').select('*').order('bucket').order('name')
+    if (data) setCategories(data)
+  }
+
+  useEffect(() => {
+    loadCategories()
+  }, [])
+
   // Merchant memory (only in add mode)
   useEffect(() => {
     if (isEdit) return
@@ -51,33 +58,32 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
         .from('merchant_categories')
         .select('category_id')
         .eq('merchant', merchant.toLowerCase())
-        .maybeSingle()
+        .single()
       if (data?.category_id) {
         setSuggestedCategoryId(data.category_id)
         setForm(f => ({ ...f, category_id: data.category_id }))
       }
     }, 400)
     return () => clearTimeout(timer)
-  }, [form.merchant, isEdit, supabase])
+  }, [form.merchant])
 
   async function handleCreateCategory(e: React.FormEvent) {
     e.preventDefault()
     setSavingCat(true)
     const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      const { data } = await supabase
-        .from('categories')
-        .insert({ user_id: user.id, name: newCat.name, bucket: newCat.bucket, color: newCat.color })
-        .select()
-        .single()
-      await mutate('categories')
-      if (data) {
-        setForm(f => ({ ...f, category_id: data.id }))
-        setSuggestedCategoryId('')
-      }
-      setNewCat({ name: '', bucket: 'spending', color: COLORS[0] })
-      setShowNewCat(false)
+    if (!user) return
+    const { data } = await supabase
+      .from('categories')
+      .insert({ user_id: user.id, name: newCat.name, bucket: newCat.bucket, color: newCat.color })
+      .select()
+      .single()
+    await loadCategories()
+    if (data) {
+      setForm(f => ({ ...f, category_id: data.id }))
+      setSuggestedCategoryId('')
     }
+    setNewCat({ name: '', bucket: 'spending', color: COLORS[0] })
+    setShowNewCat(false)
     setSavingCat(false)
   }
 
@@ -115,10 +121,7 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
     }
 
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      setLoading(false)
-      return
-    }
+    if (!user) return
 
     const { error } = await supabase.from('transactions').insert({ user_id: user.id, ...payload })
 
@@ -236,19 +239,40 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
             <option value="spending">Spending</option>
             <option value="savings">Savings</option>
           </Select>
-          <ColorPicker value={newCat.color} onChange={color => setNewCat(n => ({ ...n, color }))} />
+          <div>
+            <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Color</label>
+            <div className="flex flex-wrap gap-2 mt-1.5">
+              {COLORS.map(c => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setNewCat(n => ({ ...n, color: c }))}
+                  className="w-6 h-6 rounded-full transition-transform hover:scale-110"
+                  style={{
+                    background: c,
+                    outline: newCat.color === c ? `2px solid ${c}` : 'none',
+                    outlineOffset: 2,
+                  }}
+                />
+              ))}
+            </div>
+          </div>
           <div className="flex gap-2">
-            <Button
+            <button
               type="button"
-              variant="outline"
               onClick={() => { setShowNewCat(false); setNewCat({ name: '', bucket: 'spending', color: COLORS[0] }) }}
-              className="flex-1"
+              className="flex-1 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 text-sm text-zinc-500"
             >
               Cancel
-            </Button>
-            <Button type="button" onClick={handleCreateCategory} disabled={savingCat || !newCat.name} className="flex-1">
+            </button>
+            <button
+              type="button"
+              onClick={handleCreateCategory}
+              disabled={savingCat || !newCat.name}
+              className="flex-1 py-2 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-sm font-medium text-white dark:text-zinc-900 disabled:opacity-40"
+            >
               {savingCat ? 'Saving…' : 'Create'}
-            </Button>
+            </button>
           </div>
         </div>
       )}

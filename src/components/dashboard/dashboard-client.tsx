@@ -2,24 +2,16 @@
 
 import { useState } from 'react'
 import { useSWRConfig } from 'swr'
-import dynamic from 'next/dynamic'
 import { StatCard } from '@/components/ui/stat-card'
-import { ChartFrame } from '@/components/charts/chart-frame'
-import { Skeleton } from '@/components/ui/skeleton'
+import { SpendingPie } from '@/components/charts/spending-pie'
+import { CashflowBar } from '@/components/charts/cashflow-bar'
 import { Modal } from '@/components/ui/modal'
 import { TransactionForm } from '@/components/transactions/transaction-form'
 import { Button } from '@/components/ui/button'
 import { Plus, LogOut, Infinity as InfinityIcon } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
-import { clearPersistedCaches } from '@/lib/swr-cache'
 import { currentMonthKey } from '@/lib/data'
-
-// Recharts is by far the largest thing the app ships and none of the figures
-// above the charts need it. Loading it separately keeps it off the path to a
-// readable dashboard.
-const SpendingPie = dynamic(() => import('@/components/charts/spending-pie').then(m => ({ default: m.SpendingPie })), { loading: () => <ChartFrame /> })
-const CashflowBar = dynamic(() => import('@/components/charts/cashflow-bar').then(m => ({ default: m.CashflowBar })), { loading: () => <ChartFrame /> })
 
 interface Props {
   monthLabel: string
@@ -31,7 +23,6 @@ interface Props {
   savingsRate: number
   spendingByCategory: { category: string; amount: number; bucket: string; color: string }[]
   cashflowData: { month: string; income: number; expenses: number; savings: number }[]
-  showBreakdown: boolean
 }
 
 export function DashboardClient({
@@ -44,7 +35,6 @@ export function DashboardClient({
   savingsRate,
   spendingByCategory,
   cashflowData,
-  showBreakdown,
 }: Props) {
   const [addOpen, setAddOpen] = useState(false)
   const supabase = createClient()
@@ -52,13 +42,6 @@ export function DashboardClient({
 
   async function handleSignOut() {
     await supabase.auth.signOut()
-    // The persisted cache holds this account's balances and transactions. It
-    // has to go with the session, or the next person to sign in on this device
-    // sees them while their own data is still loading.
-    clearPersistedCaches()
-    // A full load, not a client navigation: it is the only way to be sure no
-    // component is still holding this account's data in memory.
-    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.href = '/login'
   }
 
@@ -114,24 +97,21 @@ export function DashboardClient({
         />
       </div>
 
-      {/* Spending breakdown. Rendered while loading too: appearing only once the
-          data lands used to shove the cash flow card 462px down the page. */}
-      {showBreakdown && (
+      {/* Spending breakdown */}
+      {spendingByCategory.length > 0 && (
         <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-100 dark:border-zinc-800 p-4">
           <h2 className="text-sm font-medium text-zinc-900 dark:text-zinc-100 mb-3">Spending breakdown</h2>
           <SpendingPie data={spendingByCategory} />
           <div className="mt-3 space-y-1">
-            {spendingByCategory.length > 0
-              ? spendingByCategory.map(c => (
-                <div key={c.category} className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: c.color }} />
-                    <span className="text-zinc-600 dark:text-zinc-400">{c.category}</span>
-                  </div>
-                  <span className="font-medium text-zinc-900 dark:text-zinc-100">{formatCurrency(c.amount)}</span>
+            {spendingByCategory.map(c => (
+              <div key={c.category} className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: c.color }} />
+                  <span className="text-zinc-600 dark:text-zinc-400">{c.category}</span>
                 </div>
-              ))
-              : Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-5" />)}
+                <span className="font-medium text-zinc-900 dark:text-zinc-100">{formatCurrency(c.amount)}</span>
+              </div>
+            ))}
           </div>
         </div>
       )}

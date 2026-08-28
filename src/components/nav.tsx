@@ -32,7 +32,7 @@ export function Nav() {
   const pathname = usePathname()
 
   return (
-    <nav className="fixed bottom-safe left-4 right-4 z-40">
+    <nav className="fixed bottom-6 left-4 right-4 z-40 pb-safe">
       <div className="max-w-lg mx-auto flex bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-full shadow-lg shadow-black/10 overflow-hidden">
         {links.map(({ href, label, icon: Icon }) => {
           const active = pathname === href
