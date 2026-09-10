@@ -24,3 +24,20 @@ export async function fetchQuote(symbol: string): Promise<{ name: string; price:
     return null
   }
 }
+
+export interface TickerSearchResult {
+  symbol: string
+  name: string
+  exchange: string
+}
+
+export async function searchTickers(query: string): Promise<TickerSearchResult[]> {
+  try {
+    const res = await fetch(`/api/ticker/search?q=${encodeURIComponent(query)}`)
+    if (!res.ok) return []
+    const d = await res.json()
+    return d.results ?? []
+  } catch {
+    return []
+  }
+}

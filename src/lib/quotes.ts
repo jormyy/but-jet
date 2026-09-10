@@ -18,3 +18,30 @@ export async function fetchYahooQuote(symbol: string): Promise<{ name: string; p
   const name: string = meta.shortName || meta.longName || symbol
   return { name, price }
 }
+
+export interface TickerSearchResult {
+  symbol: string
+  name: string
+  exchange: string
+}
+
+// Same undocumented Yahoo host as fetchYahooQuote, different endpoint: fuzzy
+// symbol/company-name search instead of an exact-symbol quote lookup.
+export async function fetchYahooTickerSearch(query: string): Promise<TickerSearchResult[]> {
+  const res = await fetch(
+    `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=8&newsCount=0`,
+    { headers: { 'User-Agent': 'Mozilla/5.0' } }
+  )
+  if (!res.ok) return []
+
+  const json = await res.json()
+  const quotes: unknown[] = json?.quotes ?? []
+
+  return quotes
+    .filter((q): q is Record<string, string> => typeof q === 'object' && q !== null && typeof (q as Record<string, unknown>).symbol === 'string')
+    .map(q => ({
+      symbol: q.symbol,
+      name: q.shortname || q.longname || q.symbol,
+      exchange: q.exchDisp || '',
+    }))
+}
