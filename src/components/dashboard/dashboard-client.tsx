@@ -51,6 +51,7 @@ export function DashboardClient({
     const mk = currentMonthKey()
     mutate(['txns', mk])
     mutate('cashflow')
+    mutate('available')
   }
 
   return (

@@ -6,8 +6,8 @@ import {
   fetchBills,
   fetchTransactions,
   fetchCashflow,
+  fetchAvailable,
   currentMonthKey,
-  monthKey,
 } from '@/lib/data'
 import { getMonthLabel, monthlyAmount, BUCKET_COLORS } from '@/lib/utils'
 import { DashboardClient } from '@/components/dashboard/dashboard-client'
@@ -15,29 +15,23 @@ import { Transaction, RecurringBill, Category } from '@/types'
 
 export function HomeTab() {
   const mk = currentMonthKey()
-  const prevMk = monthKey(1)
   const { data: billsData } = useSWR('bills', fetchBills)
   const { data: txns } = useSWR(['txns', mk], ([, key]) => fetchTransactions(key as string))
-  const { data: prevTxns } = useSWR(['txns', prevMk], ([, key]) => fetchTransactions(key as string))
   const { data: cashflowData } = useSWR('cashflow', fetchCashflow)
+  const { data: availableData } = useSWR('available', fetchAvailable)
 
   const bills = (billsData?.bills ?? []) as RecurringBill[]
   const categories = (billsData?.categories ?? []) as Category[]
   const transactions = (txns ?? []) as Transaction[]
-  const previousTransactions = (prevTxns ?? []) as Transaction[]
+  const available = availableData ?? 0
 
   const incomeThisMonth = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
   const expensesThisMonth = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
   const savingsThisMonth = transactions.filter(t => t.type === 'savings').reduce((s, t) => s + t.amount, 0)
   const committedBills = bills.filter(b => b.active).reduce((s, b) => s + monthlyAmount(b.amount, b.frequency), 0)
 
-  const lastMonthIncome = previousTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
-  const lastMonthExpenses = previousTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
-  const lastMonthSavings = previousTransactions.filter(t => t.type === 'savings').reduce((s, t) => s + t.amount, 0)
-  const lastMonthLeftover = lastMonthIncome - lastMonthExpenses - lastMonthSavings
-
-  const remainingSpendable = lastMonthLeftover - expensesThisMonth - savingsThisMonth
-  const savingsRate = lastMonthLeftover === 0 ? Infinity : (savingsThisMonth / lastMonthLeftover) * 100
+  const remainingSpendable = available - expensesThisMonth - savingsThisMonth
+  const savingsRate = available === 0 ? Infinity : (savingsThisMonth / available) * 100
 
   const catMap: Record<string, { category: string; amount: number; bucket: string; color: string }> = {}
   for (const t of transactions.filter(t => t.type === 'expense')) {

@@ -66,8 +66,8 @@ export async function fetchTransactions(monthKey: string) {
 export async function fetchCashflow() {
   const months = Array.from({ length: 6 }, (_, i) => {
     const offset = 5 - i
-    const d = new Date()
-    d.setMonth(d.getMonth() - offset)
+    const now = new Date()
+    const d = new Date(now.getFullYear(), now.getMonth() - offset, 1)
     return {
       label: d.toLocaleDateString('en-US', { month: 'short' }),
       ...getMonthRange(d),
@@ -91,6 +91,22 @@ export async function fetchCashflow() {
       savings: mt.filter(t => t.type === 'savings').reduce((s, t) => s + t.amount, 0),
     }
   })
+}
+
+// Money available to spend this month: everything left over from all prior months, i.e.
+// available(M) = available(M-1) + income(M-1) - expenses(M-1) - savings(M-1), unrolled.
+export async function fetchAvailable() {
+  const { start } = getMonthRange()
+  const { data, error } = await supabase()
+    .from('transactions')
+    .select('type, amount')
+    .lt('date', start)
+  if (error) throw error
+  return (data ?? []).reduce((s, t) => {
+    if (t.type === 'income') return s + t.amount
+    if (t.type === 'expense' || t.type === 'savings') return s - t.amount
+    return s
+  }, 0)
 }
 
 export async function fetchGoals() {
@@ -123,7 +139,7 @@ export function currentMonthKey() {
 }
 
 export function monthKey(offset: number) {
-  const d = new Date()
-  d.setMonth(d.getMonth() - offset)
+  const now = new Date()
+  const d = new Date(now.getFullYear(), now.getMonth() - offset, 1)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }

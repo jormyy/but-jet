@@ -24,14 +24,15 @@ export function TransactionsTab() {
   const { data: transactions } = useSWR(['txns', mk], ([, key]) => fetchTransactions(key as string))
 
   const monthLabel = (() => {
-    const d = new Date()
-    d.setMonth(d.getMonth() - monthOffset)
+    const now = new Date()
+    const d = new Date(now.getFullYear(), now.getMonth() - monthOffset, 1)
     return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
   })()
 
   function refresh() {
     mutate(['txns', mk])
     mutate('cashflow')
+    mutate('available')
   }
 
   return (
