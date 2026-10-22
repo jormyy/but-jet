@@ -55,14 +55,15 @@ function classify(t: PlaidTransaction): TransactionType | null {
 
 export type PlaidItemKind = 'bank' | 'investments'
 
-// What the user set for a merchant: its category and optionally the name to show it under
+// What the user set for a merchant: its category and optionally the name to show it under. A rule
+// with neither still means the user has reviewed this merchant and is fine with it as-is.
 interface MerchantRule {
   category_id: string | null
   rename_to: string | null
 }
 
 // Payments to/from people could be anything (splitting dinner, rent, paying someone back), so they're
-// imported with a best-guess type and flagged for review rather than skipped or auto-categorized.
+// imported with a best-guess type (rather than skipped as transfers) and never auto-categorized.
 const PERSON_PAYMENT = /zelle|venmo|cash app|apple cash/i
 
 function isPersonPayment(t: PlaidTransaction) {
@@ -162,8 +163,9 @@ async function syncItem(supabase: SupabaseClient, item: PlaidItemRow, merchantRu
         bank_merchant: bankMerchant,
         category_id: rule?.category_id ?? null,
         date: t.date,
-        // A rule the user made for this exact description already says what a person payment is for
-        needs_review: person && !rule,
+        // Anything from a merchant the user hasn't reviewed yet goes to Needs review; reviewing it
+        // creates a rule, so each merchant only needs reviewing once
+        needs_review: !rule,
       }]
     })
   if (rows.length) {
@@ -292,9 +294,7 @@ export async function syncUser(supabase: SupabaseClient, userId: string) {
   if (error) throw new Error(error.message)
 
   const merchantRules = new Map<string, MerchantRule>()
-  for (const m of memory ?? []) {
-    if (m.category_id || m.rename_to) merchantRules.set(m.merchant, { category_id: m.category_id, rename_to: m.rename_to })
-  }
+  for (const m of memory ?? []) merchantRules.set(m.merchant, { category_id: m.category_id, rename_to: m.rename_to })
 
   const errors: string[] = []
   for (const item of items ?? []) {

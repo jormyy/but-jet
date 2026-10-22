@@ -95,13 +95,13 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
     return () => clearTimeout(timer)
   }, [form.merchant])
 
-  // Turns a rename/category on a synced transaction into a rule: every transaction (past and future)
-  // the bank reports under the same merchant name gets this name and category.
+  // Turns a synced transaction's name/category into a rule: every transaction (past and future) the
+  // bank reports under the same merchant name gets this name and category and skips review. Saved
+  // even with no changes, meaning "this merchant is fine as-is" (e.g. transfers to savings).
   async function saveMerchantRule(merchant: string | null, categoryId: string | null) {
     const bankMerchant = transaction?.bank_merchant
     if (!transaction || !bankMerchant || !applyToAll) return
     const renameTo = merchant && merchant !== bankMerchant ? merchant : null
-    if (!renameTo && !categoryId) return
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     await supabase.from('merchant_categories').upsert(
