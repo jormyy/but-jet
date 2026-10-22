@@ -8,6 +8,7 @@ import { Transaction } from '@/types'
 import { TransactionList } from '@/components/transactions/transaction-list'
 import { TransactionForm } from '@/components/transactions/transaction-form'
 import { Modal } from '@/components/ui/modal'
+import { NotificationToggle } from '@/components/review/notification-toggle'
 
 // Synced transactions the app couldn't settle on its own: new merchants and payments to/from people.
 export function ReviewTab() {
@@ -27,9 +28,12 @@ export function ReviewTab() {
   return (
     <div className="px-4 pt-6 space-y-4">
       <div>
-        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-          Review{items.length ? ` · ${items.length}` : ''}
-        </h1>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+            Review{items.length ? ` · ${items.length}` : ''}
+          </h1>
+          <NotificationToggle />
+        </div>
         <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
           New merchants and payments to or from people. Edit each to set its name and category, which is
           remembered for next time, or delete ones that just moved money between your own accounts.

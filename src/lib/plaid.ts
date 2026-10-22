@@ -2,6 +2,8 @@ import { createHash, createPublicKey, timingSafeEqual, verify, type KeyObject } 
 import { Configuration, PlaidApi, PlaidEnvironments, type AccountBase, type RemovedTransaction, type Transaction as PlaidTransaction } from 'plaid'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { InvestmentCategory, TransactionType } from '@/types'
+import { notifyUser, type PushPayload } from '@/lib/push'
+import { formatCurrency } from '@/lib/utils'
 
 // Server-only: holds the Plaid secret. Never import from client components.
 export const plaid = new PlaidApi(new Configuration({
@@ -168,10 +170,14 @@ async function syncItem(supabase: SupabaseClient, item: PlaidItemRow, merchantRu
         needs_review: !rule,
       }]
     })
+  // Returns only rows actually inserted (not already-imported duplicates), for the review notification
+  let inserted: { merchant: string | null; amount: number; needs_review: boolean }[] = []
   if (rows.length) {
-    const { error } = await supabase.from('transactions')
+    const { data, error } = await supabase.from('transactions')
       .upsert(rows, { onConflict: 'plaid_transaction_id', ignoreDuplicates: true })
+      .select('merchant, amount, needs_review')
     if (error) throw new Error(error.message)
+    inserted = data ?? []
   }
 
   // Only refresh bank-owned fields so user edits (type, category, merchant name set during review) survive
@@ -194,6 +200,19 @@ async function syncItem(supabase: SupabaseClient, item: PlaidItemRow, merchantRu
 
   // Cursor is saved last so a failed write gets retried on the next sync
   await markSynced(supabase, item, cursor)
+  return inserted.filter(t => t.needs_review)
+}
+
+// "3 transactions to review" (everything waiting), listing the ones this sync just added
+function reviewNotification(added: { merchant: string | null; amount: number }[], waiting: number): PushPayload {
+  const lines = added.slice(0, 3).map(t => `${t.merchant ?? 'Transaction'} · ${formatCurrency(t.amount)}`)
+  if (added.length > 3) lines.push(`+${added.length - 3} more`)
+  return {
+    title: waiting === 1 ? '1 transaction to review' : `${waiting} transactions to review`,
+    body: lines.join('\n'),
+    url: '/review',
+    tag: 'review',
+  }
 }
 
 function holdingCategory(subtype: string | null): InvestmentCategory {
@@ -297,10 +316,11 @@ export async function syncUser(supabase: SupabaseClient, userId: string) {
   for (const m of memory ?? []) merchantRules.set(m.merchant, { category_id: m.category_id, rename_to: m.rename_to })
 
   const errors: string[] = []
+  const flagged: { merchant: string | null; amount: number }[] = []
   for (const item of items ?? []) {
     try {
       if (item.kind === 'investments') await syncInvestmentItem(supabase, item)
-      else await syncItem(supabase, item, merchantRules)
+      else flagged.push(...await syncItem(supabase, item, merchantRules))
     } catch (e) {
       const message = plaidErrorMessage(e)
       errors.push(message)
@@ -308,6 +328,19 @@ export async function syncUser(supabase: SupabaseClient, userId: string) {
     }
   }
   await applyBalancesToSnapshot(supabase, userId)
+
+  if (flagged.length) {
+    try {
+      const { count } = await supabase.from('transactions')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('needs_review', true)
+      await notifyUser(supabase, userId, reviewNotification(flagged, count ?? flagged.length))
+    } catch (e) {
+      // A failed notification shouldn't fail the sync
+      console.error('Review notification failed:', e)
+    }
+  }
   return { synced: (items?.length ?? 0) - errors.length, errors }
 }
 
