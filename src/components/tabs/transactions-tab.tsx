@@ -1,9 +1,9 @@
 'use client'
 
 import useSWR, { useSWRConfig } from 'swr'
-import { createClient } from '@/lib/supabase/client'
 import { fetchTransactions, monthKey } from '@/lib/data'
 import { Transaction } from '@/types'
+import { getMonthLabel } from '@/lib/utils'
 import { TransactionList } from '@/components/transactions/transaction-list'
 import { TransactionForm } from '@/components/transactions/transaction-form'
 import { Modal } from '@/components/ui/modal'
@@ -14,7 +14,6 @@ import { useState } from 'react'
 import { Landmark, Plus, Settings2 } from 'lucide-react'
 
 export function TransactionsTab() {
-  const supabase = createClient()
   const { mutate } = useSWRConfig()
   const [addOpen, setAddOpen] = useState(false)
   const [catsOpen, setCatsOpen] = useState(false)
@@ -25,11 +24,8 @@ export function TransactionsTab() {
   const mk = monthKey(monthOffset)
   const { data: transactions } = useSWR(['txns', mk], ([, key]) => fetchTransactions(key as string))
 
-  const monthLabel = (() => {
-    const now = new Date()
-    const d = new Date(now.getFullYear(), now.getMonth() - monthOffset, 1)
-    return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-  })()
+  const now = new Date()
+  const monthLabel = getMonthLabel(new Date(now.getFullYear(), now.getMonth() - monthOffset, 1))
 
   // Flagged transactions can be from any month, so refresh every loaded month
   function refresh() {
@@ -41,12 +37,9 @@ export function TransactionsTab() {
 
   // A sync can touch any month, linked account balances, and synced investment holdings
   function refreshAfterSync() {
-    mutate(key => Array.isArray(key) && key[0] === 'txns')
-    mutate('cashflow')
-    mutate('available')
+    refresh()
     mutate('snapshots')
     mutate('investments')
-    mutate('review')
   }
 
   return (

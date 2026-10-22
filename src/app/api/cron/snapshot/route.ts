@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { snapshotTotal, todayPacific } from '@/lib/utils'
 
 export async function GET(req: NextRequest) {
   const auth = req.headers.get('authorization')
@@ -11,7 +12,7 @@ export async function GET(req: NextRequest) {
   const { data: usersData, error: usersError } = await supabase.auth.admin.listUsers({ perPage: 1000 })
   if (usersError) return NextResponse.json({ error: usersError.message }, { status: 500 })
 
-  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date())
+  const today = todayPacific()
   let inserted = 0
   let skipped = 0
 
@@ -56,15 +57,12 @@ export async function GET(req: NextRequest) {
       continue
     }
 
-    const total = Object.values(assets).reduce((s, v) => s + v, 0) -
-      Object.values(liabilities).reduce((s, v) => s + v, 0)
-
     const { error: insertError } = await supabase.from('net_worth_snapshots').insert({
       user_id: user.id,
       date: today,
       assets,
       liabilities,
-      total,
+      total: snapshotTotal(assets, liabilities),
     })
 
     if (insertError) {

@@ -4,7 +4,7 @@ import useSWR, { useSWRConfig } from 'swr'
 import { createClient } from '@/lib/supabase/client'
 import { fetchSnapshots, fetchInvestments, fetchPlaidItems, renameLinkedAccount } from '@/lib/data'
 import { NetWorthSnapshot, InvestmentHolding } from '@/types'
-import { formatCurrency, formatDate, localDateString } from '@/lib/utils'
+import { formatCurrency, formatDate, localDateString, snapshotTotal } from '@/lib/utils'
 import { NetWorthLine } from '@/components/charts/networth-line'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
@@ -39,8 +39,10 @@ export function NetWorthTab() {
   const { mutate } = useSWRConfig()
   const { data } = useSWR('snapshots', fetchSnapshots)
   const snapshots = (data ?? []) as NetWorthSnapshot[]
+  const latest = snapshots[snapshots.length - 1]
   const { data: investmentsData } = useSWR('investments', fetchInvestments)
   const holdings = (investmentsData ?? []) as InvestmentHolding[]
+  const portfolioTotal = holdings.reduce((s, h) => s + h.current_value, 0)
   const { data: plaidItems } = useSWR('plaid-items', fetchPlaidItems)
   // Entry name → Plaid account ID for linked bank accounts. Their balances come from the bank and
   // renames go through the server so the sync keeps finding them.
@@ -111,15 +113,13 @@ export function NetWorthTab() {
     // Linked accounts aren't editable here; carry their synced balances through unchanged
     for (const [name, value] of Object.entries(latest?.assets ?? {})) if (linkedIds.has(name)) assetsMap[name] = value
     for (const [name, value] of Object.entries(latest?.liabilities ?? {})) if (linkedIds.has(name)) liabMap[name] = value
-    const totalAssets = Object.values(assetsMap).reduce((s, v) => s + v, 0)
-    const totalLiab = Object.values(liabMap).reduce((s, v) => s + v, 0)
 
     await supabase.from('net_worth_snapshots').upsert({
       user_id: user.id,
       date,
       assets: assetsMap,
       liabilities: liabMap,
-      total: totalAssets - totalLiab,
+      total: snapshotTotal(assetsMap, liabMap),
     }, { onConflict: 'user_id,date' })
     setLoading(false)
     setAddOpen(false)
@@ -159,7 +159,7 @@ export function NetWorthTab() {
     const targetMap = editingEntry.type === 'asset' ? assetsMap : liabMap
     delete targetMap[editingEntry.name]
     targetMap[editName] = parseFloat(editValue)
-    const total = Object.values(assetsMap).reduce((s, v) => s + v, 0) - Object.values(liabMap).reduce((s, v) => s + v, 0)
+    const total = snapshotTotal(assetsMap, liabMap)
     await supabase.from('net_worth_snapshots').update({ assets: assetsMap, liabilities: liabMap, total }).eq('id', latest.id)
     setEntryLoading(false)
     setEditingEntry(null)
@@ -173,15 +173,12 @@ export function NetWorthTab() {
     const liabMap = { ...latest.liabilities }
     const targetMap = confirmEntry.type === 'asset' ? assetsMap : liabMap
     delete targetMap[confirmEntry.name]
-    const total = Object.values(assetsMap).reduce((s, v) => s + v, 0) - Object.values(liabMap).reduce((s, v) => s + v, 0)
+    const total = snapshotTotal(assetsMap, liabMap)
     await supabase.from('net_worth_snapshots').update({ assets: assetsMap, liabilities: liabMap, total }).eq('id', latest.id)
     setEntryLoading(false)
     setConfirmEntry(null)
     mutate('snapshots')
   }
-
-  const portfolioTotal = holdings.reduce((s, h) => s + h.current_value, 0)
-  const latest = snapshots[snapshots.length - 1]
 
   const displayAssets = { ...(latest?.assets ?? {}) }
   if (portfolioTotal > 0) {
@@ -189,9 +186,7 @@ export function NetWorthTab() {
   } else {
     delete displayAssets['Investments']
   }
-  const displayTotal = latest
-    ? Object.values(displayAssets).reduce((s, v) => s + v, 0) - Object.values(latest.liabilities).reduce((s, v) => s + v, 0)
-    : 0
+  const displayTotal = latest ? snapshotTotal(displayAssets, latest.liabilities) : 0
 
   const cutoff = rangeCutoff(range)
   const rangedSnapshots = cutoff ? snapshots.filter(s => new Date(s.date + 'T00:00:00') >= cutoff) : snapshots

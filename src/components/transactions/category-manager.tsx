@@ -6,11 +6,10 @@ import { Category, Bucket } from '@/types'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
+import { ColorPicker } from '@/components/ui/color-picker'
 import { Trash2, Pencil } from 'lucide-react'
-import { BUCKET_LABELS } from '@/lib/utils'
+import { BUCKETS, BUCKET_LABELS } from '@/lib/utils'
 import { CATEGORY_COLORS as COLORS } from '@/lib/colors'
-
-const BUCKETS = ['bills', 'spending', 'savings'] as Bucket[]
 
 export function CategoryManager() {
   const supabase = createClient()
@@ -36,7 +35,7 @@ export function CategoryManager() {
 
   function startEdit(c: Category) {
     setEditingId(c.id)
-    setEditDraft({ name: c.name, bucket: c.bucket as Bucket, color: c.color })
+    setEditDraft({ name: c.name, bucket: c.bucket, color: c.color })
   }
 
   function cancelEdit() {
@@ -100,24 +99,7 @@ export function CategoryManager() {
                       >
                         {BUCKETS.map(bk => <option key={bk} value={bk}>{BUCKET_LABELS[bk]}</option>)}
                       </Select>
-                      <div>
-                        <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Color</label>
-                        <div className="flex flex-wrap gap-2 mt-1.5">
-                          {COLORS.map(col => (
-                            <button
-                              key={col}
-                              type="button"
-                              onClick={() => setEditDraft(d => ({ ...d, color: col }))}
-                              className="w-6 h-6 rounded-full transition-transform hover:scale-110"
-                              style={{
-                                background: col,
-                                outline: editDraft.color === col ? `2px solid ${col}` : 'none',
-                                outlineOffset: 2,
-                              }}
-                            />
-                          ))}
-                        </div>
-                      </div>
+                      <ColorPicker value={editDraft.color} onChange={col => setEditDraft(d => ({ ...d, color: col }))} />
                       <div className="flex gap-2">
                         <button
                           type="button"
@@ -184,24 +166,7 @@ export function CategoryManager() {
         >
           {BUCKETS.map(b => <option key={b} value={b}>{BUCKET_LABELS[b]}</option>)}
         </Select>
-        <div>
-          <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Color</label>
-          <div className="flex flex-wrap gap-2 mt-1.5">
-            {COLORS.map(c => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setColor(c)}
-                className="w-6 h-6 rounded-full transition-transform hover:scale-110"
-                style={{
-                  background: c,
-                  outline: color === c ? `2px solid ${c}` : 'none',
-                  outlineOffset: 2,
-                }}
-              />
-            ))}
-          </div>
-        </div>
+        <ColorPicker value={color} onChange={setColor} />
         <Button type="submit" disabled={loading || !name} className="w-full">
           Add category
         </Button>

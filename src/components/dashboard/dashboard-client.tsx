@@ -1,10 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import dynamic from 'next/dynamic'
 import { useSWRConfig } from 'swr'
 import { StatCard } from '@/components/ui/stat-card'
-import { SpendingPie } from '@/components/charts/spending-pie'
-import { CashflowBar } from '@/components/charts/cashflow-bar'
 import { Modal } from '@/components/ui/modal'
 import { TransactionForm } from '@/components/transactions/transaction-form'
 import { Button } from '@/components/ui/button'
@@ -13,12 +12,17 @@ import { formatCurrency } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { currentMonthKey } from '@/lib/data'
 
+// Recharts is the biggest dependency in the app. Loading it separately lets the stat cards show up
+// without waiting on it; the placeholder matches the charts' height so nothing jumps when they land.
+const chartPlaceholder = () => <div className="h-[220px]" />
+const SpendingPie = dynamic(() => import('@/components/charts/spending-pie').then(m => m.SpendingPie), { ssr: false, loading: chartPlaceholder })
+const CashflowBar = dynamic(() => import('@/components/charts/cashflow-bar').then(m => m.CashflowBar), { ssr: false, loading: chartPlaceholder })
+
 interface Props {
   monthLabel: string
   incomeThisMonth: number
   expensesThisMonth: number
   savingsThisMonth: number
-  committedBills: number
   remainingSpendable: number
   savingsRate: number
   spendingByCategory: { category: string; amount: number; bucket: string; color: string }[]
@@ -30,7 +34,6 @@ export function DashboardClient({
   incomeThisMonth,
   expensesThisMonth,
   savingsThisMonth,
-  committedBills,
   remainingSpendable,
   savingsRate,
   spendingByCategory,
@@ -95,7 +98,6 @@ export function DashboardClient({
           label="Remaining"
           value={remainingSpendable}
           accent={remainingSpendable >= 0 ? 'green' : 'red'}
-          sub={committedBills > 0 ? `${formatCurrency(committedBills)}/mo in bills` : undefined}
         />
       </div>
 

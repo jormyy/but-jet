@@ -6,16 +6,9 @@ import { usePlaidLink } from 'react-plaid-link'
 import { Button } from '@/components/ui/button'
 import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog'
 import { formatCurrency } from '@/lib/utils'
-import { fetchPlaidItems } from '@/lib/data'
+import { fetchJson as api, fetchPlaidItems } from '@/lib/data'
 import type { PlaidItemSummary } from '@/types'
 import { RefreshCw, Trash2 } from 'lucide-react'
-
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, init)
-  const body = await res.json()
-  if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`)
-  return body
-}
 
 interface BankManagerProps {
   // Called after anything that may have changed transactions or balances

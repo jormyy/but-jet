@@ -3,7 +3,7 @@ import { Configuration, PlaidApi, PlaidEnvironments, type AccountBase, type Remo
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { InvestmentCategory, TransactionType } from '@/types'
 import { notifyUser, type PushPayload } from '@/lib/push'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, snapshotTotal, todayPacific } from '@/lib/utils'
 
 // Server-only: holds the Plaid secret. Never import from client components.
 export const plaid = new PlaidApi(new Configuration({
@@ -20,10 +20,6 @@ export function plaidErrorMessage(e: unknown): string {
   const data = (e as { response?: { data?: { error_code?: string; error_message?: string } } }).response?.data
   if (data?.error_code) return `${data.error_code}: ${data.error_message}`
   return e instanceof Error ? e.message : String(e)
-}
-
-function todayPacific() {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date())
 }
 
 // Default name for a linked account, e.g. "Chase Checking ••1234"
@@ -294,10 +290,8 @@ export async function applyBalancesToSnapshot(supabase: SupabaseClient, userId: 
   if (portfolioTotal > 0) assets['Investments'] = portfolioTotal
   else delete assets['Investments']
 
-  const total = Object.values(assets).reduce((s, v) => s + v, 0) -
-    Object.values(liabilities).reduce((s, v) => s + v, 0)
   const { error } = await supabase.from('net_worth_snapshots').upsert(
-    { user_id: userId, date: todayPacific(), assets, liabilities, total },
+    { user_id: userId, date: todayPacific(), assets, liabilities, total: snapshotTotal(assets, liabilities) },
     { onConflict: 'user_id,date' }
   )
   if (error) throw new Error(error.message)

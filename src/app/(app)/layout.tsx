@@ -1,22 +1,29 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { usePathname } from 'next/navigation'
 import { Nav } from '@/components/nav'
+import { createClient } from '@/lib/supabase/client'
 import { HomeTab } from '@/components/tabs/home-tab'
-import { ReviewTab } from '@/components/tabs/review-tab'
-import { TransactionsTab } from '@/components/tabs/transactions-tab'
-import { GoalsTab } from '@/components/tabs/goals-tab'
-import { NetWorthTab } from '@/components/tabs/networth-tab'
-import { InvestmentsTab } from '@/components/tabs/investments-tab'
+
+// Every tab but Home is split into its own chunk so opening the app only has to download and parse
+// what the home screen needs. They're preloaded once the app is idle, so switching tabs stays instant.
+const tabLoaders = {
+  transactions: () => import('@/components/tabs/transactions-tab').then(m => m.TransactionsTab),
+  review: () => import('@/components/tabs/review-tab').then(m => m.ReviewTab),
+  netWorth: () => import('@/components/tabs/networth-tab').then(m => m.NetWorthTab),
+  goals: () => import('@/components/tabs/goals-tab').then(m => m.GoalsTab),
+  investments: () => import('@/components/tabs/investments-tab').then(m => m.InvestmentsTab),
+}
 
 const tabs = [
   { path: '/', component: HomeTab },
-  { path: '/transactions', component: TransactionsTab },
-  { path: '/review', component: ReviewTab },
-  { path: '/net-worth', component: NetWorthTab },
-  { path: '/goals', component: GoalsTab },
-  { path: '/investments', component: InvestmentsTab },
+  { path: '/transactions', component: dynamic(tabLoaders.transactions) },
+  { path: '/review', component: dynamic(tabLoaders.review) },
+  { path: '/net-worth', component: dynamic(tabLoaders.netWorth) },
+  { path: '/goals', component: dynamic(tabLoaders.goals) },
+  { path: '/investments', component: dynamic(tabLoaders.investments) },
 ]
 
 export default function AppLayout() {
@@ -30,6 +37,28 @@ export default function AppLayout() {
   if (!visited.has(pathname)) {
     setVisited(prev => new Set(prev).add(pathname))
   }
+
+  // The proxy only checks that a session cookie exists. If it turns out to be dead (e.g. signed out
+  // on another device), clear it and go to login. A failed check (e.g. offline) isn't a sign-out.
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
+      if (session || error) return
+      await supabase.auth.signOut({ scope: 'local' })
+      window.location.href = '/login'
+    })
+  }, [])
+
+  useEffect(() => {
+    const preload = () => Object.values(tabLoaders).forEach(load => load())
+    // Safari has no requestIdleCallback
+    if ('requestIdleCallback' in window) {
+      const id = requestIdleCallback(preload, { timeout: 3000 })
+      return () => cancelIdleCallback(id)
+    }
+    const id = setTimeout(preload, 1000)
+    return () => clearTimeout(id)
+  }, [])
 
   return (
     <div className="max-w-lg mx-auto pb-28">

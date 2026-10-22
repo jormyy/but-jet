@@ -1,9 +1,24 @@
 import type { ScopedMutator } from 'swr'
 import type { PlaidItemSummary } from '@/types'
 import { createClient } from '@/lib/supabase/client'
-import { getMonthRange, localDateString, spendingAmount } from '@/lib/utils'
+import { getMonthRange, localDateString, snapshotTotal, spendingAmount } from '@/lib/utils'
 
 const supabase = () => createClient()
+
+// PostgREST returns at most this many rows per request
+const PAGE_SIZE = 1000
+
+// Fetches every row of a query, a page at a time. The query must have a stable order (end it on a
+// unique column) so rows don't shift between pages.
+async function fetchAllRows<T>(page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>) {
+  const rows: T[] = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await page(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    rows.push(...(data ?? []))
+    if (!data || data.length < PAGE_SIZE) return rows
+  }
+}
 
 // Applies a transaction's effect on an asset balance (e.g. Checking, Cash) to the latest net worth
 // snapshot (creating today's snapshot, carried forward from the prior one, if it doesn't exist yet).
@@ -31,7 +46,7 @@ export async function adjustAccountBalance(delta: number, account: string = 'Che
   const assets: Record<string, number> = { ...(latest?.assets ?? {}) }
   assets[account] = (assets[account] ?? 0) + delta
   const liabilities: Record<string, number> = latest?.liabilities ?? {}
-  const total = Object.values(assets).reduce((s, v) => s + v, 0) - Object.values(liabilities).reduce((s, v) => s + v, 0)
+  const total = snapshotTotal(assets, liabilities)
 
   const today = localDateString()
   const { error } = await client
@@ -45,31 +60,31 @@ export async function adjustAccountBalance(delta: number, account: string = 'Che
   mutate?.('snapshots')
 }
 
-export async function fetchPlaidItems(): Promise<PlaidItemSummary[]> {
-  const res = await fetch('/api/plaid/items')
+// Calls one of this app's API routes, throwing its { error } message if it fails
+export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, init)
   const body = await res.json()
   if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`)
   return body
 }
 
+export function fetchPlaidItems() {
+  return fetchJson<PlaidItemSummary[]>('/api/plaid/items')
+}
+
 // Renames a linked account's net worth entry or investment holding without breaking the link
 export async function renameLinkedAccount(accountId: string, name: string) {
-  const res = await fetch(`/api/plaid/accounts/${encodeURIComponent(accountId)}`, {
+  await fetchJson(`/api/plaid/accounts/${encodeURIComponent(accountId)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name }),
   })
-  if (!res.ok) throw new Error((await res.json()).error ?? `Request failed (${res.status})`)
 }
 
-export async function fetchBills() {
-  const [{ data: bills, error: billsError }, { data: categories, error: categoriesError }] = await Promise.all([
-    supabase().from('recurring_bills').select('*, category:categories(*)').order('next_due_date'),
-    supabase().from('categories').select('*').order('bucket').order('name'),
-  ])
-  if (billsError) throw billsError
-  if (categoriesError) throw categoriesError
-  return { bills: bills ?? [], categories: categories ?? [] }
+export async function fetchCategories() {
+  const { data, error } = await supabase().from('categories').select('*').order('bucket').order('name')
+  if (error) throw error
+  return data ?? []
 }
 
 export async function fetchTransactions(monthKey: string) {
@@ -77,14 +92,14 @@ export async function fetchTransactions(monthKey: string) {
   const [year, month] = monthKey.split('-').map(Number)
   const d = new Date(year, month - 1, 1)
   const { start, end } = getMonthRange(d)
-  const { data, error } = await supabase()
+  return fetchAllRows((from, to) => supabase()
     .from('transactions')
     .select('*, category:categories(*)')
     .gte('date', start)
     .lte('date', end)
     .order('date', { ascending: false })
-  if (error) throw error
-  return data ?? []
+    .order('id')
+    .range(from, to))
 }
 
 export async function fetchCashflow() {
@@ -98,14 +113,13 @@ export async function fetchCashflow() {
     }
   })
 
-  const { data, error } = await supabase()
+  const rows = await fetchAllRows((from, to) => supabase()
     .from('transactions')
-    .select('date, type, amount')
+    .select('id, date, type, amount')
     .gte('date', months[0].start)
     .lte('date', months[months.length - 1].end)
-  if (error) throw error
-
-  const rows = data ?? []
+    .order('id')
+    .range(from, to))
   return months.map(({ label, start, end }) => {
     const mt = rows.filter(t => t.date >= start && t.date <= end)
     return {
@@ -119,18 +133,12 @@ export async function fetchCashflow() {
 
 // Money available to spend this month: everything left over from all prior months, i.e.
 // available(M) = available(M-1) + income(M-1) - expenses(M-1) - savings(M-1), unrolled.
+// Summed in the database (see migration 021) rather than downloading every past transaction.
 export async function fetchAvailable() {
   const { start } = getMonthRange()
-  const { data, error } = await supabase()
-    .from('transactions')
-    .select('type, amount')
-    .lt('date', start)
+  const { data, error } = await supabase().rpc('available_before', { before: start })
   if (error) throw error
-  return (data ?? []).reduce((s, t) => {
-    if (t.type === 'income' || t.type === 'reimbursement') return s + t.amount
-    if (t.type === 'expense' || t.type === 'savings') return s - t.amount
-    return s
-  }, 0)
+  return Number(data ?? 0)
 }
 
 // Flagged transactions from any month, oldest first
@@ -151,12 +159,13 @@ export async function fetchGoals() {
 }
 
 export async function fetchSnapshots() {
-  const { data, error } = await supabase()
+  // One per day, so this passes a page within a few years
+  return fetchAllRows((from, to) => supabase()
     .from('net_worth_snapshots')
     .select('*')
     .order('date', { ascending: true })
-  if (error) throw error
-  return data ?? []
+    .order('id')
+    .range(from, to))
 }
 
 export async function fetchInvestments() {
@@ -169,10 +178,10 @@ export async function fetchInvestments() {
 }
 
 export function currentMonthKey() {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  return monthKey(0)
 }
 
+// 'YYYY-MM' for the month `offset` months before this one
 export function monthKey(offset: number) {
   const now = new Date()
   const d = new Date(now.getFullYear(), now.getMonth() - offset, 1)

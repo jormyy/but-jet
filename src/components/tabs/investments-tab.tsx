@@ -101,7 +101,7 @@ export function InvestmentsTab() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Investments</h1>
         <div className="flex gap-2">
-          {tickerHoldings.length > 0 && (
+          {hasTickers && (
             <Button variant="ghost" size="sm" onClick={handleRefreshPrices} disabled={refreshing}>
               <RefreshCw size={14} className={`mr-1 ${refreshing ? 'animate-spin' : ''}`} />
               {refreshing ? 'Refreshing...' : 'Refresh'}

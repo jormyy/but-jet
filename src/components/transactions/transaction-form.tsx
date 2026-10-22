@@ -7,7 +7,8 @@ import { Category, Transaction, TransactionType, Bucket } from '@/types'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { BUCKET_LABELS, localDateString, transactionDelta } from '@/lib/utils'
+import { ColorPicker } from '@/components/ui/color-picker'
+import { BUCKETS, BUCKET_LABELS, localDateString, transactionDelta } from '@/lib/utils'
 import { CATEGORY_COLORS as COLORS } from '@/lib/colors'
 import { adjustAccountBalance } from '@/lib/data'
 
@@ -290,28 +291,9 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
             value={newCat.bucket}
             onChange={e => setNewCat(n => ({ ...n, bucket: e.target.value as Bucket }))}
           >
-            <option value="bills">Bills</option>
-            <option value="spending">Spending</option>
-            <option value="savings">Savings</option>
+            {BUCKETS.map(b => <option key={b} value={b}>{BUCKET_LABELS[b]}</option>)}
           </Select>
-          <div>
-            <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Color</label>
-            <div className="flex flex-wrap gap-2 mt-1.5">
-              {COLORS.map(c => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setNewCat(n => ({ ...n, color: c }))}
-                  className="w-6 h-6 rounded-full transition-transform hover:scale-110"
-                  style={{
-                    background: c,
-                    outline: newCat.color === c ? `2px solid ${c}` : 'none',
-                    outlineOffset: 2,
-                  }}
-                />
-              ))}
-            </div>
-          </div>
+          <ColorPicker value={newCat.color} onChange={c => setNewCat(n => ({ ...n, color: c }))} />
           <div className="flex gap-2">
             <button
               type="button"

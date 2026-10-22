@@ -1,5 +1,5 @@
 import { clsx, type ClassValue } from 'clsx'
-import { TransactionType } from '@/types'
+import type { Bucket, TransactionType } from '@/types'
 
 export function cn(...inputs: ClassValue[]) {
   return clsx(inputs)
@@ -29,6 +29,11 @@ export function localDateString(date = new Date()): string {
   return `${y}-${m}-${d}`
 }
 
+// Today's date in Pacific time, for server code (crons, syncs) where the local timezone is UTC
+export function todayPacific(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date())
+}
+
 export function getMonthRange(date = new Date()) {
   const start = new Date(date.getFullYear(), date.getMonth(), 1)
   const end = new Date(date.getFullYear(), date.getMonth() + 1, 0)
@@ -42,13 +47,6 @@ export function getMonthLabel(date = new Date()) {
   return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 }
 
-// Monthly cost of a recurring bill (prorates annual ones)
-export function monthlyAmount(amount: number, frequency: string): number {
-  if (frequency === 'annual') return amount / 12
-  if (frequency === 'weekly') return amount * (52 / 12)
-  return amount
-}
-
 // Income and reimbursements add to checking; expenses and savings transfers both leave checking
 export function transactionDelta(type: TransactionType, amount: number): number {
   return type === 'income' || type === 'reimbursement' ? amount : -amount
@@ -60,6 +58,14 @@ export function spendingAmount(t: { type: TransactionType; amount: number }): nu
   if (t.type === 'reimbursement') return -t.amount
   return 0
 }
+
+// Net worth of a snapshot's entries
+export function snapshotTotal(assets: Record<string, number>, liabilities: Record<string, number>): number {
+  const sum = (m: Record<string, number>) => Object.values(m).reduce((s, v) => s + v, 0)
+  return sum(assets) - sum(liabilities)
+}
+
+export const BUCKETS: Bucket[] = ['bills', 'spending', 'savings']
 
 export const BUCKET_LABELS: Record<string, string> = {
   bills: 'Bills',

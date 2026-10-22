@@ -1,6 +1,5 @@
 export type Bucket = 'bills' | 'spending' | 'savings'
 export type TransactionType = 'income' | 'expense' | 'savings' | 'reimbursement'
-export type BillFrequency = 'monthly' | 'annual' | 'weekly'
 
 export interface Category {
   id: string
@@ -9,13 +8,6 @@ export interface Category {
   bucket: Bucket
   color: string
   created_at: string
-}
-
-export interface MerchantCategory {
-  id: string
-  user_id: string
-  merchant: string
-  category_id: string | null
 }
 
 export interface Transaction {
@@ -32,19 +24,6 @@ export interface Transaction {
   // Merchant name as the bank reported it (synced transactions only)
   bank_merchant: string | null
   needs_review: boolean
-  created_at: string
-  category?: Category
-}
-
-export interface RecurringBill {
-  id: string
-  user_id: string
-  name: string
-  amount: number
-  frequency: BillFrequency
-  next_due_date: string
-  category_id: string | null
-  active: boolean
   created_at: string
   category?: Category
 }
@@ -104,14 +83,4 @@ export interface PlaidItemSummary {
   last_synced_at: string | null
   error: string | null
   accounts: LinkedAccount[]
-}
-
-export interface DashboardStats {
-  incomeThisMonth: number
-  expensesThisMonth: number
-  savingsThisMonth: number
-  committedBills: number
-  remainingSpendable: number
-  savingsRate: number
-  spendingByCategory: { category: string; amount: number; bucket: Bucket; color: string }[]
 }

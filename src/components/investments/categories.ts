@@ -1,4 +1,7 @@
 import { InvestmentCategory } from '@/types'
+import type { TickerSearchResult } from '@/lib/quotes'
+
+export type { TickerSearchResult }
 
 export const INVESTMENT_CATEGORIES: { value: InvestmentCategory; label: string; color: string }[] = [
   { value: '401k',      label: '401k',      color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' },
@@ -23,12 +26,6 @@ export async function fetchQuote(symbol: string): Promise<{ name: string; price:
   } catch {
     return null
   }
-}
-
-export interface TickerSearchResult {
-  symbol: string
-  name: string
-  exchange: string
 }
 
 export async function searchTickers(query: string): Promise<TickerSearchResult[]> {

@@ -1,6 +1,6 @@
 import { defaultCache } from "@serwist/turbopack/worker";
 import type { PrecacheEntry, SerwistGlobalConfig } from "serwist";
-import { Serwist } from "serwist";
+import { ExpirationPlugin, NetworkFirst, Serwist } from "serwist";
 
 declare global {
   interface WorkerGlobalScope extends SerwistGlobalConfig {
@@ -15,7 +15,21 @@ const serwist = new Serwist({
   skipWaiting: true,
   clientsClaim: true,
   navigationPreload: true,
-  runtimeCaching: defaultCache,
+  runtimeCaching: [
+    // Opening the app is a navigation, which defaultCache's page rule never matches (it keys off a
+    // Content-Type request header that navigations don't send). It fell through to a NetworkFirst
+    // with no timeout, so on a weak connection the app sat on a blank screen until the network gave
+    // up. The pages are empty shells (all data loads client-side), so a cached copy is just as good.
+    {
+      matcher: ({ request, sameOrigin }) => sameOrigin && request.mode === "navigate",
+      handler: new NetworkFirst({
+        cacheName: "navigations",
+        networkTimeoutSeconds: 3,
+        plugins: [new ExpirationPlugin({ maxEntries: 32, maxAgeSeconds: 24 * 60 * 60 })],
+      }),
+    },
+    ...defaultCache,
+  ],
   fallbacks: {
     entries: [
       {

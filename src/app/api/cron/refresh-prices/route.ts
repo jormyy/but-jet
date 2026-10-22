@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchYahooQuote } from '@/lib/quotes'
+import { todayPacific } from '@/lib/utils'
 
 export async function GET(req: NextRequest) {
   const auth = req.headers.get('authorization')
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
     quotes.set(ticker, await fetchYahooQuote(ticker))
   }))
 
-  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date())
+  const today = todayPacific()
   let updated = 0
   const failed: string[] = []
 
