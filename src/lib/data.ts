@@ -1,4 +1,5 @@
 import type { ScopedMutator } from 'swr'
+import type { PlaidItemSummary } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import { getMonthRange, localDateString, spendingAmount } from '@/lib/utils'
 
@@ -8,8 +9,14 @@ const supabase = () => createClient()
 // snapshot (creating today's snapshot, carried forward from the prior one, if it doesn't exist yet).
 // `mutate` must be the context-bound mutator from the caller's `useSWRConfig()`, since SWRProvider
 // uses a custom cache provider — the module-level `mutate` from 'swr' targets an unrelated cache.
+// Once a bank is linked, its balances come straight from the bank, so only cash transactions (which the
+// bank never sees) still adjust a balance by hand.
 export async function adjustAccountBalance(delta: number, account: string = 'Checking', mutate?: ScopedMutator) {
   if (delta === 0) return
+  if (account !== 'Cash') {
+    const items = await fetchPlaidItems().catch(() => [])
+    if (items.some(i => i.kind === 'bank')) return
+  }
   const client = supabase()
   const { data: { user } } = await client.auth.getUser()
   if (!user) return
@@ -36,6 +43,23 @@ export async function adjustAccountBalance(delta: number, account: string = 'Che
     return
   }
   mutate?.('snapshots')
+}
+
+export async function fetchPlaidItems(): Promise<PlaidItemSummary[]> {
+  const res = await fetch('/api/plaid/items')
+  const body = await res.json()
+  if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`)
+  return body
+}
+
+// Renames a linked account's net worth entry or investment holding without breaking the link
+export async function renameLinkedAccount(accountId: string, name: string) {
+  const res = await fetch(`/api/plaid/accounts/${encodeURIComponent(accountId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  })
+  if (!res.ok) throw new Error((await res.json()).error ?? `Request failed (${res.status})`)
 }
 
 export async function fetchBills() {

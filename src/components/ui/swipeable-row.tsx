@@ -10,7 +10,8 @@ const SWIPE_THRESHOLD = 30
 
 interface SwipeableRowProps {
   onEdit: () => void
-  onDelete: () => void
+  // Omit for rows that can't be deleted; the delete action is then hidden
+  onDelete?: () => void
   children: React.ReactNode
 }
 
@@ -30,7 +31,7 @@ export function SwipeableRow({ onEdit, onDelete, children }: SwipeableRowProps) 
 
   function handleTouchMove(e: React.TouchEvent) {
     const dx = startXRef.current - e.touches[0].clientX
-    const next = Math.max(-EDIT_WIDTH, Math.min(DELETE_WIDTH, baseOffsetRef.current + dx))
+    const next = Math.max(-EDIT_WIDTH, Math.min(onDelete ? DELETE_WIDTH : 0, baseOffsetRef.current + dx))
     setOffset(next)
   }
 
@@ -79,7 +80,7 @@ export function SwipeableRow({ onEdit, onDelete, children }: SwipeableRowProps) 
       </div>
 
       {/* Delete action revealed on swipe left */}
-      <div
+      {onDelete && <div
         className="absolute right-0 top-0 bottom-0 flex items-center justify-center bg-red-500"
         style={{ width: DELETE_WIDTH }}
       >
@@ -90,7 +91,7 @@ export function SwipeableRow({ onEdit, onDelete, children }: SwipeableRowProps) 
           <Trash2 size={18} />
           <span className="text-xs font-medium">Delete</span>
         </button>
-      </div>
+      </div>}
 
       <div
         className={cn('relative', !dragging && 'transition-transform duration-200 ease-out')}
@@ -112,13 +113,15 @@ export function SwipeableRow({ onEdit, onDelete, children }: SwipeableRowProps) 
           >
             <Pencil size={14} />
           </button>
-          <button
-            onClick={e => { e.stopPropagation(); onDelete() }}
-            className="p-1.5 rounded-md text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
-            aria-label="Delete"
-          >
-            <Trash2 size={14} />
-          </button>
+          {onDelete && (
+            <button
+              onClick={e => { e.stopPropagation(); onDelete() }}
+              className="p-1.5 rounded-md text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
+              aria-label="Delete"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -2,7 +2,7 @@
 
 import useSWR, { useSWRConfig } from 'swr'
 import { createClient } from '@/lib/supabase/client'
-import { fetchSnapshots, fetchInvestments } from '@/lib/data'
+import { fetchSnapshots, fetchInvestments, fetchPlaidItems, renameLinkedAccount } from '@/lib/data'
 import { NetWorthSnapshot, InvestmentHolding } from '@/types'
 import { formatCurrency, formatDate, localDateString } from '@/lib/utils'
 import { NetWorthLine } from '@/components/charts/networth-line'
@@ -41,6 +41,14 @@ export function NetWorthTab() {
   const snapshots = (data ?? []) as NetWorthSnapshot[]
   const { data: investmentsData } = useSWR('investments', fetchInvestments)
   const holdings = (investmentsData ?? []) as InvestmentHolding[]
+  const { data: plaidItems } = useSWR('plaid-items', fetchPlaidItems)
+  // Entry name → Plaid account ID for linked bank accounts. Their balances come from the bank and
+  // renames go through the server so the sync keeps finding them.
+  const linkedIds = new Map(
+    (plaidItems ?? []).flatMap(i => i.accounts)
+      .filter(a => ['depository', 'credit', 'loan'].includes(a.type))
+      .map(a => [a.label, a.account_id])
+  )
 
   const [addOpen, setAddOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -54,6 +62,7 @@ export function NetWorthTab() {
   const [editValue, setEditValue] = useState('')
   const [confirmEntry, setConfirmEntry] = useState<{ type: EntryType; name: string; value: number } | null>(null)
   const [entryLoading, setEntryLoading] = useState(false)
+  const [entryError, setEntryError] = useState<string | null>(null)
 
   function addRow(setter: typeof setAssets) {
     setter(rows => [...rows, { name: '', value: '' }])
@@ -69,11 +78,12 @@ export function NetWorthTab() {
 
   function openAddModal() {
     const assetEntries = Object.entries(latest?.assets ?? {})
-      .filter(([name]) => name !== 'Investments')
+      .filter(([name]) => name !== 'Investments' && !linkedIds.has(name))
       .map(([name, value]) => ({ name, value: String(value) }))
     setAssets(assetEntries.length > 0 ? assetEntries : [{ name: '', value: '' }])
 
     const liabEntries = Object.entries(latest?.liabilities ?? {})
+      .filter(([name]) => !linkedIds.has(name))
       .map(([name, value]) => ({ name, value: String(value) }))
     setLiabilities(liabEntries.length > 0 ? liabEntries : [{ name: '', value: '' }])
 
@@ -98,6 +108,9 @@ export function NetWorthTab() {
     for (const l of liabilities.filter(l => l.name && l.value)) {
       liabMap[l.name] = parseFloat(l.value)
     }
+    // Linked accounts aren't editable here; carry their synced balances through unchanged
+    for (const [name, value] of Object.entries(latest?.assets ?? {})) if (linkedIds.has(name)) assetsMap[name] = value
+    for (const [name, value] of Object.entries(latest?.liabilities ?? {})) if (linkedIds.has(name)) liabMap[name] = value
     const totalAssets = Object.values(assetsMap).reduce((s, v) => s + v, 0)
     const totalLiab = Object.values(liabMap).reduce((s, v) => s + v, 0)
 
@@ -116,6 +129,7 @@ export function NetWorthTab() {
   }
 
   function openEditEntry(type: EntryType, name: string, value: number) {
+    setEntryError(null)
     setEditingEntry({ type, name })
     setEditName(name)
     setEditValue(String(value))
@@ -125,6 +139,21 @@ export function NetWorthTab() {
     e.preventDefault()
     if (!editingEntry || !latest) return
     setEntryLoading(true)
+
+    const linkedId = linkedIds.get(editingEntry.name)
+    if (linkedId) {
+      try {
+        await renameLinkedAccount(linkedId, editName)
+        setEditingEntry(null)
+        mutate('snapshots')
+        mutate('plaid-items')
+      } catch (err) {
+        setEntryError((err as Error).message)
+      }
+      setEntryLoading(false)
+      return
+    }
+
     const assetsMap = { ...latest.assets }
     const liabMap = { ...latest.liabilities }
     const targetMap = editingEntry.type === 'asset' ? assetsMap : liabMap
@@ -209,10 +238,10 @@ export function NetWorthTab() {
                 <SwipeableRow
                   key={name}
                   onEdit={() => openEditEntry('asset', name, value)}
-                  onDelete={() => setConfirmEntry({ type: 'asset', name, value })}
+                  onDelete={linkedIds.has(name) ? undefined : () => setConfirmEntry({ type: 'asset', name, value })}
                 >
                   <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-zinc-900">
-                    <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{name}</span>
+                    <EntryName name={name} linked={linkedIds.has(name)} />
                     <span className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
                       {formatCurrency(value)}
                     </span>
@@ -232,10 +261,10 @@ export function NetWorthTab() {
               <SwipeableRow
                 key={name}
                 onEdit={() => openEditEntry('liability', name, value)}
-                onDelete={() => setConfirmEntry({ type: 'liability', name, value })}
+                onDelete={linkedIds.has(name) ? undefined : () => setConfirmEntry({ type: 'liability', name, value })}
               >
                 <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-zinc-900">
-                  <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{name}</span>
+                  <EntryName name={name} linked={linkedIds.has(name)} />
                   <span className="text-sm font-semibold tabular-nums text-red-500">
                     {formatCurrency(-value)}
                   </span>
@@ -283,6 +312,11 @@ export function NetWorthTab() {
             {portfolioTotal > 0 && (
               <p className="text-xs text-zinc-400">
                 Investments ({formatCurrency(portfolioTotal)}) added automatically — enter bank accounts etc. below
+              </p>
+            )}
+            {linkedIds.size > 0 && (
+              <p className="text-xs text-zinc-400">
+                Linked accounts update from your bank and are kept as-is
               </p>
             )}
             {assets.map((a, i) => (
@@ -341,15 +375,22 @@ export function NetWorthTab() {
             onChange={e => setEditName(e.target.value)}
             required
           />
-          <Input
-            label="Value"
-            id="entry-value"
-            type="number"
-            step="0.01"
-            value={editValue}
-            onChange={e => setEditValue(e.target.value)}
-            required
-          />
+          {editingEntry && linkedIds.has(editingEntry.name) ? (
+            <p className="text-xs text-zinc-400">
+              Linked account: the balance syncs from your bank. Renaming keeps it linked.
+            </p>
+          ) : (
+            <Input
+              label="Value"
+              id="entry-value"
+              type="number"
+              step="0.01"
+              value={editValue}
+              onChange={e => setEditValue(e.target.value)}
+              required
+            />
+          )}
+          {entryError && <p className="text-xs text-red-500">{entryError}</p>}
           <Button type="submit" disabled={entryLoading} className="w-full">
             {entryLoading ? 'Saving...' : 'Save'}
           </Button>
@@ -365,5 +406,18 @@ export function NetWorthTab() {
         onConfirm={handleDeleteEntry}
       />
     </div>
+  )
+}
+
+function EntryName({ name, linked }: { name: string; linked: boolean }) {
+  return (
+    <span className="flex items-center gap-1.5 min-w-0">
+      <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{name}</span>
+      {linked && (
+        <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+          Linked
+        </span>
+      )}
+    </span>
   )
 }

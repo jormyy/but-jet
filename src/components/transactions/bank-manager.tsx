@@ -6,15 +6,9 @@ import { usePlaidLink } from 'react-plaid-link'
 import { Button } from '@/components/ui/button'
 import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog'
 import { formatCurrency } from '@/lib/utils'
+import { fetchPlaidItems } from '@/lib/data'
+import type { PlaidItemSummary } from '@/types'
 import { RefreshCw, Trash2 } from 'lucide-react'
-
-interface LinkedItem {
-  id: string
-  institution_name: string | null
-  last_synced_at: string | null
-  error: string | null
-  accounts: { id: string; name: string; mask: string | null; type: string; current_balance: number | null }[]
-}
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init)
@@ -29,12 +23,12 @@ interface BankManagerProps {
 }
 
 export function BankManager({ onSynced }: BankManagerProps) {
-  const { data: items, mutate } = useSWR('plaid-items', () => api<LinkedItem[]>('/api/plaid/items'))
+  const { data: items, mutate } = useSWR('plaid-items', fetchPlaidItems)
   const [linkToken, setLinkToken] = useState<string | null>(null)
   const linkKind = useRef<'bank' | 'investments'>('bank')
   const [busy, setBusy] = useState<'bank' | 'investments' | 'sync' | 'unlink' | null>(null)
   const [message, setMessage] = useState<string | null>(null)
-  const [confirmTarget, setConfirmTarget] = useState<LinkedItem | null>(null)
+  const [confirmTarget, setConfirmTarget] = useState<PlaidItemSummary | null>(null)
 
   const { open, ready } = usePlaidLink({
     token: linkToken,
@@ -143,7 +137,7 @@ export function BankManager({ onSynced }: BankManagerProps) {
                 {item.accounts.map(a => (
                   <div key={a.id} className="flex items-center justify-between px-4 py-2">
                     <span className="text-sm text-zinc-700 dark:text-zinc-300 truncate">
-                      {a.name}{a.mask ? ` ••${a.mask}` : ''}
+                      {a.label}
                     </span>
                     {a.current_balance != null && (
                       <span className="text-sm tabular-nums text-zinc-500 ml-3 shrink-0">

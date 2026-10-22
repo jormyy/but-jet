@@ -39,7 +39,7 @@ export function InvestmentList({ holdings, onDelete, onEdit }: InvestmentListPro
           const meta = investmentCategoryMeta(h.category)
           const pricePerShare = h.last_price ?? (h.shares ? h.current_value / h.shares : null)
           return (
-            <SwipeableRow key={h.id} onEdit={() => onEdit(h)} onDelete={() => setConfirmTarget(h)}>
+            <SwipeableRow key={h.id} onEdit={() => onEdit(h)} onDelete={h.plaid_account_id ? undefined : () => setConfirmTarget(h)}>
               <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-zinc-900">
                 <div className="flex flex-col min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">

@@ -84,6 +84,26 @@ export interface InvestmentHolding {
   created_at: string
 }
 
+// A linked Plaid connection as returned by /api/plaid/items (no access tokens)
+export interface LinkedAccount {
+  id: string
+  account_id: string
+  // Net worth entry key / investment holding name; renaming changes this, not the link
+  label: string
+  type: string
+  subtype: string | null
+  current_balance: number | null
+}
+
+export interface PlaidItemSummary {
+  id: string
+  kind: 'bank' | 'investments'
+  institution_name: string | null
+  last_synced_at: string | null
+  error: string | null
+  accounts: LinkedAccount[]
+}
+
 export interface DashboardStats {
   incomeThisMonth: number
   expensesThisMonth: number

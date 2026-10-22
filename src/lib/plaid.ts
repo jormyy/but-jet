@@ -24,9 +24,14 @@ function todayPacific() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date())
 }
 
-// Net worth snapshot key for a linked account, e.g. "Chase Checking ••1234"
+// Default name for a linked account, e.g. "Chase Checking ••1234"
 export function accountLabel(a: { name: string; mask: string | null }) {
   return a.mask ? `${a.name} ••${a.mask}` : a.name
+}
+
+// The name a linked account appears under: its net worth entry key, or its investment holding's name
+export function displayName(a: { display_name: string | null; name: string; mask: string | null }) {
+  return a.display_name ?? accountLabel(a)
 }
 
 // Maps a Plaid transaction to this app's income/expense/savings model, or null to skip it.
@@ -83,6 +88,15 @@ async function upsertAccounts(supabase: SupabaseClient, item: PlaidItemRow, acco
     current_balance: a.balances.current,
   })), { onConflict: 'account_id' })
   if (error) throw new Error(error.message)
+
+  // Pin each new account's display name; after this only a user rename changes it
+  for (const a of accounts) {
+    const { error: nameError } = await supabase.from('plaid_accounts')
+      .update({ display_name: accountLabel({ name: a.official_name || a.name, mask: a.mask }) })
+      .eq('account_id', a.account_id)
+      .is('display_name', null)
+    if (nameError) throw new Error(nameError.message)
+  }
 }
 
 async function markSynced(supabase: SupabaseClient, item: PlaidItemRow, cursor?: string) {
@@ -197,22 +211,31 @@ async function syncInvestmentItem(supabase: SupabaseClient, item: PlaidItemRow) 
   const { data } = await plaid.investmentsHoldingsGet({ access_token: item.access_token })
   await upsertAccounts(supabase, item, data.accounts)
 
-  const rows = data.accounts
-    .filter(a => (a.type === 'investment' || a.type === 'brokerage') && a.balances.current != null)
-    .map(a => ({
-      user_id: item.user_id,
-      plaid_account_id: a.account_id,
-      name: accountLabel({ name: a.official_name || a.name, mask: a.mask }),
-      category: holdingCategory(a.subtype),
-      current_value: a.balances.current!,
-      value_date: todayPacific(),
-      ticker: null,
-      shares: null,
-      last_price: null,
-    }))
-  if (rows.length) {
-    const { error } = await supabase.from('investment_holdings').upsert(rows, { onConflict: 'plaid_account_id' })
-    if (error) throw new Error(error.message)
+  const accounts = data.accounts.filter(a => (a.type === 'investment' || a.type === 'brokerage') && a.balances.current != null)
+  if (accounts.length) {
+    const ids = accounts.map(a => a.account_id)
+    const [{ data: names }, { data: existing }] = await Promise.all([
+      supabase.from('plaid_accounts').select('account_id, display_name').in('account_id', ids),
+      supabase.from('investment_holdings').select('plaid_account_id').in('plaid_account_id', ids),
+    ])
+    const nameById = new Map(names?.map(n => [n.account_id, n.display_name as string | null]))
+    const existingIds = new Set(existing?.map(h => h.plaid_account_id))
+
+    for (const a of accounts) {
+      const values = {
+        name: nameById.get(a.account_id) ?? accountLabel({ name: a.official_name || a.name, mask: a.mask }),
+        current_value: a.balances.current!,
+        value_date: todayPacific(),
+      }
+      // Category is only set on creation so the user can change it afterwards
+      const { error } = existingIds.has(a.account_id)
+        ? await supabase.from('investment_holdings').update(values).eq('plaid_account_id', a.account_id)
+        : await supabase.from('investment_holdings').upsert(
+            { ...values, user_id: item.user_id, plaid_account_id: a.account_id, category: holdingCategory(a.subtype) },
+            { onConflict: 'plaid_account_id', ignoreDuplicates: true }
+          )
+      if (error) throw new Error(error.message)
+    }
   }
 
   await markSynced(supabase, item)
@@ -223,7 +246,7 @@ async function syncInvestmentItem(supabase: SupabaseClient, item: PlaidItemRow) 
 // through "Investments", recomputed from holdings like the snapshot cron does. `remove` drops stale keys.
 export async function applyBalancesToSnapshot(supabase: SupabaseClient, userId: string, remove: string[] = []) {
   const [{ data: accounts }, { data: holdings }] = await Promise.all([
-    supabase.from('plaid_accounts').select('name, mask, type, current_balance').eq('user_id', userId),
+    supabase.from('plaid_accounts').select('name, mask, display_name, type, current_balance').eq('user_id', userId),
     supabase.from('investment_holdings').select('current_value').eq('user_id', userId),
   ])
   if (!accounts?.length && !remove.length) return
@@ -244,8 +267,8 @@ export async function applyBalancesToSnapshot(supabase: SupabaseClient, userId: 
   }
   for (const a of accounts ?? []) {
     if (a.current_balance == null) continue
-    if (a.type === 'depository') assets[accountLabel(a)] = a.current_balance
-    else if (a.type === 'credit' || a.type === 'loan') liabilities[accountLabel(a)] = a.current_balance
+    if (a.type === 'depository') assets[displayName(a)] = a.current_balance
+    else if (a.type === 'credit' || a.type === 'loan') liabilities[displayName(a)] = a.current_balance
   }
   const portfolioTotal = (holdings ?? []).reduce((s, h) => s + h.current_value, 0)
   if (portfolioTotal > 0) assets['Investments'] = portfolioTotal

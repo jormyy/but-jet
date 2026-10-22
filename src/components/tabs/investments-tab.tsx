@@ -9,6 +9,7 @@ import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { InvestmentForm } from '@/components/investments/investment-form'
 import { InvestmentList } from '@/components/investments/investment-list'
+import { SyncedHoldingForm } from '@/components/investments/synced-holding-form'
 import { fetchQuote } from '@/components/investments/categories'
 import { useEffect, useRef, useState } from 'react'
 import { Plus, RefreshCw } from 'lucide-react'
@@ -139,12 +140,17 @@ export function InvestmentsTab() {
       </Modal>
 
       <Modal open={!!editingInvestment} onClose={() => setEditingInvestment(null)} title="Edit investment">
-        {editingInvestment && (
+        {editingInvestment && (editingInvestment.plaid_account_id ? (
+          <SyncedHoldingForm
+            holding={{ ...editingInvestment, plaid_account_id: editingInvestment.plaid_account_id }}
+            onSuccess={() => { setEditingInvestment(null); refresh() }}
+          />
+        ) : (
           <InvestmentForm
             investment={editingInvestment}
             onSuccess={() => { setEditingInvestment(null); refresh() }}
           />
-        )}
+        ))}
       </Modal>
     </div>
   )
