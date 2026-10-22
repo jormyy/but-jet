@@ -23,6 +23,9 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
   const [loading, setLoading] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
   const [suggestedCategoryId, setSuggestedCategoryId] = useState<string>('')
+  const [pastMerchants, setPastMerchants] = useState<string[]>([])
+  // For synced transactions: save the name/category as a rule for this bank merchant
+  const [applyToAll, setApplyToAll] = useState(true)
 
   const [form, setForm] = useState({
     type: (transaction?.type ?? 'expense') as TransactionType,
@@ -44,28 +47,72 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
     if (data) setCategories(data)
   }
 
+  // Merchant names used before, suggested in the merchant field
+  async function loadPastMerchants() {
+    const { data } = await supabase
+      .from('transactions')
+      .select('merchant')
+      .not('merchant', 'is', null)
+      .order('date', { ascending: false })
+      .limit(1000)
+    setPastMerchants([...new Set((data ?? []).map(t => t.merchant as string))])
+  }
+
   useEffect(() => {
     loadCategories()
+    loadPastMerchants()
   }, [])
 
-  // Merchant memory (only in add mode)
+  // Merchant memory: fill in the category this merchant had before. In edit mode, only once the
+  // merchant is changed (e.g. renaming a bank's "UEP ZHANGLIANG MALATANG" to a past "Zhangliang").
   useEffect(() => {
-    if (isEdit) return
     const merchant = form.merchant.trim()
-    if (!merchant) return
+    if (!merchant || (isEdit && merchant === (transaction?.merchant ?? ''))) return
     const timer = setTimeout(async () => {
       const { data } = await supabase
         .from('merchant_categories')
         .select('category_id')
         .eq('merchant', merchant.toLowerCase())
-        .single()
-      if (data?.category_id) {
-        setSuggestedCategoryId(data.category_id)
-        setForm(f => ({ ...f, category_id: data.category_id }))
+        .maybeSingle()
+      let categoryId = data?.category_id
+      if (!categoryId) {
+        // Fall back to the category last used on a transaction with this merchant name
+        const { data: past } = await supabase
+          .from('transactions')
+          .select('category_id')
+          .ilike('merchant', merchant.replace(/[%_\\]/g, '\\$&'))
+          .not('category_id', 'is', null)
+          .order('date', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        categoryId = past?.category_id
+      }
+      if (categoryId) {
+        setSuggestedCategoryId(categoryId)
+        setForm(f => ({ ...f, category_id: categoryId }))
       }
     }, 400)
     return () => clearTimeout(timer)
   }, [form.merchant])
+
+  // Turns a rename/category on a synced transaction into a rule: every transaction (past and future)
+  // the bank reports under the same merchant name gets this name and category.
+  async function saveMerchantRule(merchant: string | null, categoryId: string | null) {
+    const bankMerchant = transaction?.bank_merchant
+    if (!transaction || !bankMerchant || !applyToAll) return
+    const renameTo = merchant && merchant !== bankMerchant ? merchant : null
+    if (!renameTo && !categoryId) return
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    await supabase.from('merchant_categories').upsert(
+      { user_id: user.id, merchant: bankMerchant.trim().toLowerCase(), category_id: categoryId, rename_to: renameTo },
+      { onConflict: 'user_id,merchant' }
+    )
+    await supabase.from('transactions')
+      .update({ merchant: renameTo ?? bankMerchant, ...(categoryId && { category_id: categoryId }), needs_review: false })
+      .eq('bank_merchant', bankMerchant)
+      .neq('id', transaction.id)
+  }
 
   async function handleCreateCategory(e: React.FormEvent) {
     e.preventDefault()
@@ -104,6 +151,7 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
     if (isEdit) {
       // Saving an edit counts as reviewing it
       const { error } = await supabase.from('transactions').update({ ...payload, needs_review: false }).eq('id', transaction.id)
+      if (!error) await saveMerchantRule(payload.merchant, payload.category_id)
       // Synced transactions never touched the manual balances (bank balances come from Plaid), so skip them here too
       if (!error && !transaction.plaid_transaction_id) {
         const oldAccount = transaction.is_cash ? 'Cash' : 'Checking'
@@ -184,9 +232,13 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
         id="merchant"
         type="text"
         placeholder="e.g. Trader Joe's, Employer"
+        list="merchant-options"
         value={form.merchant}
         onChange={e => setForm(f => ({ ...f, merchant: e.target.value }))}
       />
+      <datalist id="merchant-options">
+        {pastMerchants.map(m => <option key={m} value={m} />)}
+      </datalist>
 
       {suggestedCategoryId && form.category_id === suggestedCategoryId && (
         <p className="text-xs text-emerald-600 dark:text-emerald-400">
@@ -278,6 +330,18 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
             </button>
           </div>
         </div>
+      )}
+
+      {isEdit && transaction.bank_merchant && (
+        <label className="flex items-start gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+          <input
+            type="checkbox"
+            checked={applyToAll}
+            onChange={e => setApplyToAll(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>Use this name and category for all &ldquo;{transaction.bank_merchant}&rdquo; transactions, including future ones</span>
+        </label>
       )}
 
       <Input

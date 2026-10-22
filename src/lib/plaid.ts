@@ -55,6 +55,12 @@ function classify(t: PlaidTransaction): TransactionType | null {
 
 export type PlaidItemKind = 'bank' | 'investments'
 
+// What the user set for a merchant: its category and optionally the name to show it under
+interface MerchantRule {
+  category_id: string | null
+  rename_to: string | null
+}
+
 // Payments to/from people could be anything (splitting dinner, rent, paying someone back), so they're
 // imported with a best-guess type and flagged for review rather than skipped or auto-categorized.
 const PERSON_PAYMENT = /zelle|venmo|cash app|apple cash/i
@@ -134,37 +140,30 @@ async function fetchChanges(item: PlaidItemRow) {
   }
 }
 
-async function syncItem(supabase: SupabaseClient, item: PlaidItemRow, merchantCategories: Map<string, string>) {
+async function syncItem(supabase: SupabaseClient, item: PlaidItemRow, merchantRules: Map<string, MerchantRule>) {
   const { added, modified, removed, accounts, cursor } = await fetchChanges(item)
 
   const rows = added
     .filter(t => !t.pending && t.date >= item.sync_start_date)
     .flatMap(t => {
-      if (isPersonPayment(t)) {
-        return [{
-          user_id: item.user_id,
-          plaid_transaction_id: t.transaction_id,
-          amount: Math.abs(t.amount),
-          type: (t.amount > 0 ? 'expense' : 'income') as TransactionType,
-          // The raw description says who it was with (e.g. "Zelle payment to Alex"); merchant_name is just "Zelle"
-          merchant: t.name,
-          category_id: null,
-          date: t.date,
-          needs_review: true,
-        }]
-      }
-      const type = classify(t)
+      const person = isPersonPayment(t)
+      // For person payments the raw description says who it was with (e.g. "Zelle payment to Alex");
+      // merchant_name would just be "Zelle"
+      const bankMerchant = person ? t.name : (t.merchant_name || t.name)
+      const rule = merchantRules.get(bankMerchant.trim().toLowerCase())
+      const type: TransactionType | null = person ? (t.amount > 0 ? 'expense' : 'income') : classify(t)
       if (!type) return []
-      const merchant = t.merchant_name || t.name
       return [{
         user_id: item.user_id,
         plaid_transaction_id: t.transaction_id,
         amount: Math.abs(t.amount),
         type,
-        merchant,
-        category_id: merchantCategories.get(merchant.trim().toLowerCase()) ?? null,
+        merchant: rule?.rename_to || bankMerchant,
+        bank_merchant: bankMerchant,
+        category_id: rule?.category_id ?? null,
         date: t.date,
-        needs_review: false,
+        // A rule the user made for this exact description already says what a person payment is for
+        needs_review: person && !rule,
       }]
     })
   if (rows.length) {
@@ -288,18 +287,20 @@ export async function applyBalancesToSnapshot(supabase: SupabaseClient, userId: 
 export async function syncUser(supabase: SupabaseClient, userId: string) {
   const [{ data: items, error }, { data: memory }] = await Promise.all([
     supabase.from('plaid_items').select('id, user_id, kind, access_token, cursor, sync_start_date').eq('user_id', userId),
-    supabase.from('merchant_categories').select('merchant, category_id').eq('user_id', userId),
+    supabase.from('merchant_categories').select('merchant, category_id, rename_to').eq('user_id', userId),
   ])
   if (error) throw new Error(error.message)
 
-  const merchantCategories = new Map<string, string>()
-  for (const m of memory ?? []) if (m.category_id) merchantCategories.set(m.merchant, m.category_id)
+  const merchantRules = new Map<string, MerchantRule>()
+  for (const m of memory ?? []) {
+    if (m.category_id || m.rename_to) merchantRules.set(m.merchant, { category_id: m.category_id, rename_to: m.rename_to })
+  }
 
   const errors: string[] = []
   for (const item of items ?? []) {
     try {
       if (item.kind === 'investments') await syncInvestmentItem(supabase, item)
-      else await syncItem(supabase, item, merchantCategories)
+      else await syncItem(supabase, item, merchantRules)
     } catch (e) {
       const message = plaidErrorMessage(e)
       errors.push(message)

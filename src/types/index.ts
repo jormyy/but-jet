@@ -29,6 +29,8 @@ export interface Transaction {
   date: string
   is_cash: boolean
   plaid_transaction_id: string | null
+  // Merchant name as the bank reported it (synced transactions only)
+  bank_merchant: string | null
   needs_review: boolean
   created_at: string
   category?: Category
