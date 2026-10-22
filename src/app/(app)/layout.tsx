@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { Nav } from '@/components/nav'
 import { HomeTab } from '@/components/tabs/home-tab'
-import { BillsTab } from '@/components/tabs/bills-tab'
+import { ReviewTab } from '@/components/tabs/review-tab'
 import { TransactionsTab } from '@/components/tabs/transactions-tab'
 import { GoalsTab } from '@/components/tabs/goals-tab'
 import { NetWorthTab } from '@/components/tabs/networth-tab'
@@ -13,7 +13,7 @@ import { InvestmentsTab } from '@/components/tabs/investments-tab'
 const tabs = [
   { path: '/', component: HomeTab },
   { path: '/transactions', component: TransactionsTab },
-  { path: '/bills', component: BillsTab },
+  { path: '/review', component: ReviewTab },
   { path: '/net-worth', component: NetWorthTab },
   { path: '/goals', component: GoalsTab },
   { path: '/investments', component: InvestmentsTab },

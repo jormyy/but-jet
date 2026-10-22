@@ -2,13 +2,15 @@
 
 import Link, { useLinkStatus } from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, ArrowLeftRight, Receipt, TrendingUp, Target, PieChart, type LucideIcon } from 'lucide-react'
+import useSWR from 'swr'
+import { LayoutDashboard, ArrowLeftRight, Inbox, TrendingUp, Target, PieChart, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { fetchNeedsReview } from '@/lib/data'
 
 const links = [
   { href: '/', label: 'Home', icon: LayoutDashboard },
   { href: '/transactions', label: 'Txns', icon: ArrowLeftRight },
-  { href: '/bills', label: 'Bills', icon: Receipt },
+  { href: '/review', label: 'Review', icon: Inbox },
   { href: '/investments', label: 'Invest', icon: PieChart },
   { href: '/net-worth', label: 'Worth', icon: TrendingUp },
   { href: '/goals', label: 'Goals', icon: Target },
@@ -17,19 +19,28 @@ const links = [
 // Lives inside the Link so useLinkStatus can see its pending state. Delayed
 // and fixed-size so a fast (already-prefetched) navigation never flashes it —
 // it only shows up when a tap is genuinely still waiting on the network.
-function NavIcon({ Icon, active }: { Icon: LucideIcon; active: boolean }) {
+function NavIcon({ Icon, active, badge }: { Icon: LucideIcon; active: boolean; badge?: number }) {
   const { pending } = useLinkStatus()
   return (
-    <Icon
-      size={20}
-      strokeWidth={active ? 2.5 : 1.75}
-      className={cn('transition-opacity', pending && 'opacity-40 duration-150 delay-150')}
-    />
+    <span className="relative">
+      <Icon
+        size={20}
+        strokeWidth={active ? 2.5 : 1.75}
+        className={cn('transition-opacity', pending && 'opacity-40 duration-150 delay-150')}
+      />
+      {!!badge && (
+        <span className="absolute -top-1.5 -right-2.5 min-w-4 h-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-semibold leading-4 text-center">
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
+    </span>
   )
 }
 
 export function Nav() {
   const pathname = usePathname()
+  // Shares the Review tab's SWR key, so the badge updates as items are reviewed
+  const { data: needsReview } = useSWR('review', fetchNeedsReview)
 
   return (
     <nav className="fixed bottom-6 left-4 right-4 z-40 pb-safe">
@@ -47,7 +58,7 @@ export function Nav() {
                   : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'
               )}
             >
-              <NavIcon Icon={Icon} active={active} />
+              <NavIcon Icon={Icon} active={active} badge={href === '/review' ? needsReview?.length : undefined} />
               {label}
             </Link>
           )

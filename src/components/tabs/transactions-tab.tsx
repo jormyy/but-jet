@@ -2,7 +2,7 @@
 
 import useSWR, { useSWRConfig } from 'swr'
 import { createClient } from '@/lib/supabase/client'
-import { fetchNeedsReview, fetchTransactions, monthKey } from '@/lib/data'
+import { fetchTransactions, monthKey } from '@/lib/data'
 import { Transaction } from '@/types'
 import { TransactionList } from '@/components/transactions/transaction-list'
 import { TransactionForm } from '@/components/transactions/transaction-form'
@@ -24,7 +24,6 @@ export function TransactionsTab() {
 
   const mk = monthKey(monthOffset)
   const { data: transactions } = useSWR(['txns', mk], ([, key]) => fetchTransactions(key as string))
-  const { data: needsReview } = useSWR('review', fetchNeedsReview)
 
   const monthLabel = (() => {
     const now = new Date()
@@ -67,22 +66,6 @@ export function TransactionsTab() {
           </Button>
         </div>
       </div>
-
-      {!!needsReview?.length && (
-        <div className="rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/60 dark:bg-amber-950/20 p-3 space-y-3">
-          <div>
-            <p className="text-sm font-medium text-amber-700 dark:text-amber-400">Needs review · {needsReview.length}</p>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              New merchants and payments to or from people. Edit each to set its name and category, which is remembered for next time, or delete ones that just moved money between your own accounts.
-            </p>
-          </div>
-          <TransactionList
-            transactions={needsReview as Transaction[]}
-            onDelete={refresh}
-            onEdit={setEditingTransaction}
-          />
-        </div>
-      )}
 
       {/* Month selector */}
       <div className="flex items-center gap-3">
