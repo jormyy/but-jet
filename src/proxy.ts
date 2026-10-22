@@ -9,7 +9,7 @@ export const config = {
   matcher: [
     {
       source:
-        '/((?!_next/static|_next/image|favicon.ico|icons|manifest.json|serwist|~offline|api/cron|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+        '/((?!_next/static|_next/image|favicon.ico|icons|manifest.json|serwist|~offline|api/cron|api/plaid/webhook|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
       // Nav prefetches every tab link on mount; none of our routes render
       // anything auth-sensitive server-side (page.tsx are empty shells —
       // real data fetching happens client-side under Supabase's own

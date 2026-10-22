@@ -37,12 +37,13 @@ export function TransactionsTab() {
     mutate('available')
   }
 
-  // A bank sync can touch any month, plus linked account balances
+  // A sync can touch any month, linked account balances, and synced investment holdings
   function refreshAfterSync() {
     mutate(key => Array.isArray(key) && key[0] === 'txns')
     mutate('cashflow')
     mutate('available')
     mutate('snapshots')
+    mutate('investments')
   }
 
   return (
@@ -50,7 +51,7 @@ export function TransactionsTab() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Transactions</h1>
         <div className="flex gap-2">
-          <Button onClick={() => setBanksOpen(true)} variant="ghost" size="sm" aria-label="Linked banks">
+          <Button onClick={() => setBanksOpen(true)} variant="ghost" size="sm" aria-label="Linked accounts">
             <Landmark size={14} />
           </Button>
           <Button onClick={() => setCatsOpen(true)} variant="ghost" size="sm">
@@ -104,7 +105,7 @@ export function TransactionsTab() {
         <CategoryManager />
       </Modal>
 
-      <Modal open={banksOpen} onClose={() => setBanksOpen(false)} title="Linked banks">
+      <Modal open={banksOpen} onClose={() => setBanksOpen(false)} title="Linked accounts">
         <BankManager onSynced={refreshAfterSync} />
       </Modal>
     </div>

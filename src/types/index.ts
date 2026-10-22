@@ -78,6 +78,7 @@ export interface InvestmentHolding {
   category: InvestmentCategory
   current_value: number
   value_date: string
+  plaid_account_id: string | null
   created_at: string
 }
 

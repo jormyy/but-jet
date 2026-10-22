@@ -7,7 +7,7 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await (await createClient()).auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { public_token, institution_name } = await req.json()
+  const { public_token, institution_name, kind } = await req.json()
   if (typeof public_token !== 'string') return NextResponse.json({ error: 'Missing public_token' }, { status: 400 })
 
   try {
@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
       item_id: data.item_id,
       access_token: data.access_token,
       institution_name: typeof institution_name === 'string' ? institution_name : null,
+      kind: kind === 'investments' ? 'investments' : 'bank',
     })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 

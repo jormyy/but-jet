@@ -1,6 +1,7 @@
+import { createHash, createPublicKey, timingSafeEqual, verify, type KeyObject } from 'node:crypto'
 import { Configuration, PlaidApi, PlaidEnvironments, type AccountBase, type RemovedTransaction, type Transaction as PlaidTransaction } from 'plaid'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { TransactionType } from '@/types'
+import type { InvestmentCategory, TransactionType } from '@/types'
 
 // Server-only: holds the Plaid secret. Never import from client components.
 export const plaid = new PlaidApi(new Configuration({
@@ -47,12 +48,40 @@ function classify(t: PlaidTransaction): TransactionType | null {
   return 'income'
 }
 
+export type PlaidItemKind = 'bank' | 'investments'
+
 interface PlaidItemRow {
   id: string
   user_id: string
+  kind: PlaidItemKind
   access_token: string
   cursor: string | null
   sync_start_date: string
+}
+
+// Fields shared by bank (AccountBase) and investment (InvestmentAccount) accounts
+type PlaidAccount = Pick<AccountBase, 'account_id' | 'name' | 'official_name' | 'mask' | 'type' | 'subtype' | 'balances'>
+
+async function upsertAccounts(supabase: SupabaseClient, item: PlaidItemRow, accounts: PlaidAccount[]) {
+  if (!accounts.length) return
+  const { error } = await supabase.from('plaid_accounts').upsert(accounts.map(a => ({
+    user_id: item.user_id,
+    item_id: item.id,
+    account_id: a.account_id,
+    name: a.official_name || a.name,
+    mask: a.mask,
+    type: a.type,
+    subtype: a.subtype,
+    current_balance: a.balances.current,
+  })), { onConflict: 'account_id' })
+  if (error) throw new Error(error.message)
+}
+
+async function markSynced(supabase: SupabaseClient, item: PlaidItemRow, cursor?: string) {
+  const { error } = await supabase.from('plaid_items')
+    .update({ ...(cursor !== undefined && { cursor }), last_synced_at: new Date().toISOString(), error: null })
+    .eq('id', item.id)
+  if (error) throw new Error(error.message)
 }
 
 // Pulls every page of changes since the item's cursor. Restarts from the original cursor if
@@ -124,35 +153,57 @@ async function syncItem(supabase: SupabaseClient, item: PlaidItemRow, merchantCa
     if (error) throw new Error(error.message)
   }
 
-  if (accounts.length) {
-    const { error } = await supabase.from('plaid_accounts').upsert(accounts.map(a => ({
+  await upsertAccounts(supabase, item, accounts)
+
+  // Cursor is saved last so a failed write gets retried on the next sync
+  await markSynced(supabase, item, cursor)
+}
+
+function holdingCategory(subtype: string | null): InvestmentCategory {
+  const s = subtype ?? ''
+  if (/401|403|457/.test(s)) return '401k'
+  if (s === 'roth') return 'roth_ira'
+  if (s.includes('ira')) return 'ira'
+  if (s.includes('brokerage')) return 'brokerage'
+  if (s.includes('crypto')) return 'crypto'
+  return 'other'
+}
+
+// Investment connections (Fidelity, ADP, ...) sync each account's total as one holding.
+// No ticker/shares, so the price-refresh cron leaves them alone; Plaid keeps them current.
+async function syncInvestmentItem(supabase: SupabaseClient, item: PlaidItemRow) {
+  const { data } = await plaid.investmentsHoldingsGet({ access_token: item.access_token })
+  await upsertAccounts(supabase, item, data.accounts)
+
+  const rows = data.accounts
+    .filter(a => (a.type === 'investment' || a.type === 'brokerage') && a.balances.current != null)
+    .map(a => ({
       user_id: item.user_id,
-      item_id: item.id,
-      account_id: a.account_id,
-      name: a.official_name || a.name,
-      mask: a.mask,
-      type: a.type,
-      subtype: a.subtype,
-      current_balance: a.balances.current,
-    })), { onConflict: 'account_id' })
+      plaid_account_id: a.account_id,
+      name: accountLabel({ name: a.official_name || a.name, mask: a.mask }),
+      category: holdingCategory(a.subtype),
+      current_value: a.balances.current!,
+      value_date: todayPacific(),
+      ticker: null,
+      shares: null,
+      last_price: null,
+    }))
+  if (rows.length) {
+    const { error } = await supabase.from('investment_holdings').upsert(rows, { onConflict: 'plaid_account_id' })
     if (error) throw new Error(error.message)
   }
 
-  // Cursor is saved last so a failed write gets retried on the next sync
-  const { error } = await supabase.from('plaid_items')
-    .update({ cursor, last_synced_at: new Date().toISOString(), error: null })
-    .eq('id', item.id)
-  if (error) throw new Error(error.message)
+  await markSynced(supabase, item)
 }
 
 // Writes linked account balances into today's net worth snapshot (carried forward from the latest one).
-// Depository accounts are assets; credit cards and loans are liabilities. Investment accounts are
-// skipped since holdings are tracked separately under "Investments". `remove` drops stale keys.
+// Depository accounts are assets; credit cards and loans are liabilities. Investment accounts count
+// through "Investments", recomputed from holdings like the snapshot cron does. `remove` drops stale keys.
 export async function applyBalancesToSnapshot(supabase: SupabaseClient, userId: string, remove: string[] = []) {
-  const { data: accounts } = await supabase
-    .from('plaid_accounts')
-    .select('name, mask, type, current_balance')
-    .eq('user_id', userId)
+  const [{ data: accounts }, { data: holdings }] = await Promise.all([
+    supabase.from('plaid_accounts').select('name, mask, type, current_balance').eq('user_id', userId),
+    supabase.from('investment_holdings').select('current_value').eq('user_id', userId),
+  ])
   if (!accounts?.length && !remove.length) return
 
   const { data: latest } = await supabase
@@ -174,6 +225,9 @@ export async function applyBalancesToSnapshot(supabase: SupabaseClient, userId: 
     if (a.type === 'depository') assets[accountLabel(a)] = a.current_balance
     else if (a.type === 'credit' || a.type === 'loan') liabilities[accountLabel(a)] = a.current_balance
   }
+  const portfolioTotal = (holdings ?? []).reduce((s, h) => s + h.current_value, 0)
+  if (portfolioTotal > 0) assets['Investments'] = portfolioTotal
+  else delete assets['Investments']
 
   const total = Object.values(assets).reduce((s, v) => s + v, 0) -
     Object.values(liabilities).reduce((s, v) => s + v, 0)
@@ -188,7 +242,7 @@ export async function applyBalancesToSnapshot(supabase: SupabaseClient, userId: 
 // its error is stored on the item and returned.
 export async function syncUser(supabase: SupabaseClient, userId: string) {
   const [{ data: items, error }, { data: memory }] = await Promise.all([
-    supabase.from('plaid_items').select('id, user_id, access_token, cursor, sync_start_date').eq('user_id', userId),
+    supabase.from('plaid_items').select('id, user_id, kind, access_token, cursor, sync_start_date').eq('user_id', userId),
     supabase.from('merchant_categories').select('merchant, category_id').eq('user_id', userId),
   ])
   if (error) throw new Error(error.message)
@@ -199,7 +253,8 @@ export async function syncUser(supabase: SupabaseClient, userId: string) {
   const errors: string[] = []
   for (const item of items ?? []) {
     try {
-      await syncItem(supabase, item, merchantCategories)
+      if (item.kind === 'investments') await syncInvestmentItem(supabase, item)
+      else await syncItem(supabase, item, merchantCategories)
     } catch (e) {
       const message = plaidErrorMessage(e)
       errors.push(message)
@@ -208,4 +263,39 @@ export async function syncUser(supabase: SupabaseClient, userId: string) {
   }
   await applyBalancesToSnapshot(supabase, userId)
   return { synced: (items?.length ?? 0) - errors.length, errors }
+}
+
+// Plaid signs each webhook with a JWT (ES256) in the Plaid-Verification header. It's valid if the
+// signature checks out against Plaid's published key, it's under 5 minutes old, and its body hash
+// matches the raw request body. Keys are cached per instance since they rarely rotate.
+const webhookKeys = new Map<string, KeyObject>()
+
+export async function verifyPlaidWebhook(body: string, token: string | null): Promise<boolean> {
+  if (!token) return false
+  try {
+    const [header, payload, signature] = token.split('.')
+    const { alg, kid } = JSON.parse(Buffer.from(header, 'base64url').toString())
+    if (alg !== 'ES256' || typeof kid !== 'string') return false
+
+    let key = webhookKeys.get(kid)
+    if (!key) {
+      const { data } = await plaid.webhookVerificationKeyGet({ key_id: kid })
+      if (data.key.expired_at != null) return false
+      const { kty, crv, x, y } = data.key
+      key = createPublicKey({ key: { kty, crv, x, y }, format: 'jwk' })
+      webhookKeys.set(kid, key)
+    }
+
+    const signed = Buffer.from(`${header}.${payload}`)
+    if (!verify('sha256', signed, { key, dsaEncoding: 'ieee-p1363' }, Buffer.from(signature, 'base64url'))) return false
+
+    const claims = JSON.parse(Buffer.from(payload, 'base64url').toString())
+    if (Date.now() / 1000 - claims.iat > 5 * 60) return false
+
+    const bodyHash = Buffer.from(createHash('sha256').update(body).digest('hex'))
+    const claimedHash = Buffer.from(String(claims.request_body_sha256))
+    return bodyHash.length === claimedHash.length && timingSafeEqual(bodyHash, claimedHash)
+  } catch {
+    return false
+  }
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import useSWR from 'swr'
 import { usePlaidLink } from 'react-plaid-link'
 import { Button } from '@/components/ui/button'
@@ -31,7 +31,8 @@ interface BankManagerProps {
 export function BankManager({ onSynced }: BankManagerProps) {
   const { data: items, mutate } = useSWR('plaid-items', () => api<LinkedItem[]>('/api/plaid/items'))
   const [linkToken, setLinkToken] = useState<string | null>(null)
-  const [busy, setBusy] = useState<'link' | 'sync' | 'unlink' | null>(null)
+  const linkKind = useRef<'bank' | 'investments'>('bank')
+  const [busy, setBusy] = useState<'bank' | 'investments' | 'sync' | 'unlink' | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [confirmTarget, setConfirmTarget] = useState<LinkedItem | null>(null)
 
@@ -39,14 +40,16 @@ export function BankManager({ onSynced }: BankManagerProps) {
     token: linkToken,
     onSuccess: async (public_token, metadata) => {
       setLinkToken(null)
-      setBusy('link')
+      setBusy(linkKind.current)
       try {
         await api('/api/plaid/exchange', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ public_token, institution_name: metadata.institution?.name }),
+          body: JSON.stringify({ public_token, institution_name: metadata.institution?.name, kind: linkKind.current }),
         })
-        setMessage('Linked. Transactions can take a few minutes to show up at first. Hit sync again shortly.')
+        setMessage(linkKind.current === 'investments'
+          ? 'Linked. Its accounts now show up under Investments.'
+          : 'Linked. Transactions can take a few minutes to show up at first, and will sync automatically when ready.')
       } catch (e) {
         setMessage((e as Error).message)
       }
@@ -65,11 +68,16 @@ export function BankManager({ onSynced }: BankManagerProps) {
     if (linkToken && ready) open()
   }, [linkToken, ready, open])
 
-  async function startLink() {
+  async function startLink(kind: 'bank' | 'investments') {
+    linkKind.current = kind
     setMessage(null)
-    setBusy('link')
+    setBusy(kind)
     try {
-      const { link_token } = await api<{ link_token: string }>('/api/plaid/link-token', { method: 'POST' })
+      const { link_token } = await api<{ link_token: string }>('/api/plaid/link-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind }),
+      })
       setLinkToken(link_token)
     } catch (e) {
       setMessage((e as Error).message)
@@ -123,7 +131,7 @@ export function BankManager({ onSynced }: BankManagerProps) {
                 <button
                   onClick={() => setConfirmTarget(item)}
                   className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                  aria-label="Unlink bank"
+                  aria-label="Unlink account"
                 >
                   <Trash2 size={14} />
                 </button>
@@ -150,28 +158,31 @@ export function BankManager({ onSynced }: BankManagerProps) {
         </div>
       ) : (
         <p className="text-sm text-zinc-400 text-center py-4">
-          {items ? 'No banks linked yet' : 'Loading…'}
+          {items ? 'No accounts linked yet' : 'Loading…'}
         </p>
       )}
 
       {message && <p className="text-xs text-zinc-500 whitespace-pre-line">{message}</p>}
 
       <div className="flex gap-2">
-        {!!items?.length && (
-          <Button variant="ghost" onClick={syncNow} disabled={!!busy} className="flex-1">
-            <RefreshCw size={14} className={busy === 'sync' ? 'mr-1 animate-spin' : 'mr-1'} />
-            {busy === 'sync' ? 'Syncing…' : 'Sync now'}
-          </Button>
-        )}
-        <Button onClick={startLink} disabled={!!busy} className="flex-1">
-          {busy === 'link' ? 'Linking…' : 'Link a bank'}
+        <Button onClick={() => startLink('bank')} disabled={!!busy} className="flex-1">
+          {busy === 'bank' ? 'Linking…' : 'Link bank'}
+        </Button>
+        <Button onClick={() => startLink('investments')} disabled={!!busy} className="flex-1">
+          {busy === 'investments' ? 'Linking…' : 'Link investments'}
         </Button>
       </div>
+      {!!items?.length && (
+        <Button variant="ghost" onClick={syncNow} disabled={!!busy}>
+          <RefreshCw size={14} className={busy === 'sync' ? 'mr-1 animate-spin' : 'mr-1'} />
+          {busy === 'sync' ? 'Syncing…' : 'Sync now'}
+        </Button>
+      )}
 
       <ConfirmDeleteDialog
         open={!!confirmTarget}
-        title="Unlink bank?"
-        description={`${confirmTarget?.institution_name ?? 'This bank'} will stop syncing. Imported transactions are kept.`}
+        title="Unlink account?"
+        description={`${confirmTarget?.institution_name ?? 'This connection'} will stop syncing. Imported transactions are kept; synced investment holdings are removed.`}
         loading={busy === 'unlink'}
         onCancel={() => setConfirmTarget(null)}
         onConfirm={handleConfirmUnlink}

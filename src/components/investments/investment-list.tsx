@@ -52,7 +52,11 @@ export function InvestmentList({ holdings, onDelete, onEdit }: InvestmentListPro
                   <div className="flex items-center gap-2 mt-0.5">
                     {h.shares && <span className="text-xs text-zinc-400">{h.shares} shares</span>}
                     {pricePerShare && <span className="text-xs text-zinc-400">@ {formatCurrency(pricePerShare)}</span>}
-                    {!h.shares && <span className="text-xs text-zinc-400">As of {formatDate(h.value_date)}</span>}
+                    {!h.shares && (
+                      <span className="text-xs text-zinc-400">
+                        {h.plaid_account_id ? 'Synced · ' : ''}As of {formatDate(h.value_date)}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <span className="text-sm font-semibold tabular-nums ml-3 shrink-0 text-zinc-900 dark:text-zinc-100">
