@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { sendToDevice } from '@/lib/push'
 
-// Registers this device for notifications (body: PushSubscription.toJSON())
+// Registers this device for notifications (body: PushSubscription.toJSON()) and sends it a test
+// notification, so turning them on immediately shows they work
 export async function POST(req: NextRequest) {
   const { data: { user } } = await (await createClient()).auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -12,12 +14,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid subscription' }, { status: 400 })
   }
 
-  const { error } = await createAdminClient().from('push_subscriptions').upsert(
+  const supabase = createAdminClient()
+  const { error } = await supabase.from('push_subscriptions').upsert(
     { user_id: user.id, endpoint, p256dh: keys.p256dh, auth: keys.auth },
     { onConflict: 'endpoint' }
   )
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ ok: true })
+
+  const testError = await sendToDevice(supabase, { endpoint, p256dh: keys.p256dh, auth: keys.auth }, {
+    title: 'Notifications are on',
+    body: "You'll get a notification here when new transactions need review.",
+    url: '/review',
+    tag: 'review',
+  })
+  return NextResponse.json({ ok: true, testError })
 }
 
 // Turns notifications off for this device (body: { endpoint })

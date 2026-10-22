@@ -53,8 +53,11 @@ export function NotificationToggle() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sub.toJSON()),
       })
-      if (!res.ok) throw new Error((await res.json()).error ?? 'Could not turn on notifications')
+      const body = await res.json()
+      if (!res.ok) throw new Error(body.error ?? 'Could not turn on notifications')
       setStatus('on')
+      // The server sends this device a test notification right away
+      if (body.testError) setError(`Notifications are on, but the test notification failed: ${body.testError}`)
     } catch (e) {
       setError((e as Error).message)
     } finally {
