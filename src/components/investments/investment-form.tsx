@@ -23,6 +23,10 @@ export function InvestmentForm({ onSuccess, investment }: InvestmentFormProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [highlighted, setHighlighted] = useState(0)
   const tickerFieldRef = useRef<HTMLDivElement>(null)
+  // Ticker holdings can be entered as a share count or as a dollar balance
+  // (e.g. a 401k statement that only shows the total), which is converted to
+  // shares at the current price so price refreshes keep it up to date.
+  const [entryMode, setEntryMode] = useState<'shares' | 'balance'>('shares')
   const [form, setForm] = useState({
     name: investment?.name ?? '',
     ticker: investment?.ticker ?? '',
@@ -102,11 +106,15 @@ export function InvestmentForm({ onSuccess, investment }: InvestmentFormProps) {
     setLoading(true)
 
     const ticker = form.ticker.toUpperCase() || null
-    const shares = form.shares ? parseFloat(form.shares) : null
+    let shares = form.shares ? parseFloat(form.shares) : null
 
     let currentValue: number
     let lastPrice: number | null = null
-    if (ticker && shares && tickerInfo?.price) {
+    if (ticker && entryMode === 'balance' && tickerInfo?.price) {
+      lastPrice = tickerInfo.price
+      currentValue = parseFloat(form.current_value)
+      shares = Math.round(currentValue / lastPrice * 1e6) / 1e6
+    } else if (ticker && shares && tickerInfo?.price) {
       lastPrice = tickerInfo.price
       currentValue = Math.round(shares * lastPrice * 100) / 100
     } else {
@@ -144,9 +152,11 @@ export function InvestmentForm({ onSuccess, investment }: InvestmentFormProps) {
   }
 
   const hasTicker = form.ticker.trim().length > 0
-  const canSubmit = hasTicker
-    ? (!!form.shares && (tickerInfo?.price != null || !!form.current_value))
-    : !!form.current_value
+  const canSubmit = !hasTicker
+    ? !!form.current_value
+    : entryMode === 'balance'
+      ? (!!form.current_value && tickerInfo?.price != null)
+      : (!!form.shares && (tickerInfo?.price != null || !!form.current_value))
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -212,7 +222,27 @@ export function InvestmentForm({ onSuccess, investment }: InvestmentFormProps) {
         )}
       </div>
 
-      {hasTicker ? (
+      {hasTicker && (
+        <div className="flex rounded-lg bg-zinc-100 dark:bg-zinc-800 p-0.5 text-xs font-medium">
+          {(['shares', 'balance'] as const).map(mode => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setEntryMode(mode)}
+              className={cn(
+                'flex-1 rounded-md py-1.5 capitalize transition-colors',
+                entryMode === mode
+                  ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-900 dark:text-zinc-100'
+                  : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+              )}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {hasTicker && entryMode === 'shares' ? (
         <Input
           label="Shares"
           id="inv-shares"
@@ -226,7 +256,7 @@ export function InvestmentForm({ onSuccess, investment }: InvestmentFormProps) {
         />
       ) : (
         <Input
-          label="Current value"
+          label={hasTicker ? 'Balance' : 'Current value'}
           id="inv-value"
           type="number"
           min="0"
@@ -238,13 +268,25 @@ export function InvestmentForm({ onSuccess, investment }: InvestmentFormProps) {
         />
       )}
 
-      {hasTicker && form.shares && tickerInfo?.price && (
+      {hasTicker && entryMode === 'balance' && form.current_value && tickerInfo?.price && (
+        <p className="text-xs text-zinc-500 -mt-2">
+          ≈ {(parseFloat(form.current_value) / tickerInfo.price).toFixed(4)} shares at current price
+        </p>
+      )}
+
+      {hasTicker && entryMode === 'balance' && !tickerInfo?.price && !tickerLoading && (
+        <p className="text-xs text-amber-500 -mt-2">
+          Can&apos;t convert to shares without a price for this ticker
+        </p>
+      )}
+
+      {hasTicker && entryMode === 'shares' && form.shares && tickerInfo?.price && (
         <p className="text-xs text-zinc-500 -mt-2">
           ≈ {formatCurrency(parseFloat(form.shares) * tickerInfo.price)} at current price
         </p>
       )}
 
-      {hasTicker && form.shares && !tickerInfo?.price && !tickerLoading && (
+      {hasTicker && entryMode === 'shares' && form.shares && !tickerInfo?.price && !tickerLoading && (
         <Input
           label="Current value (price lookup failed)"
           id="inv-value-fallback"
