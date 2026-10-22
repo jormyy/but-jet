@@ -9,14 +9,16 @@ import { TransactionForm } from '@/components/transactions/transaction-form'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { CategoryManager } from '@/components/transactions/category-manager'
+import { BankManager } from '@/components/transactions/bank-manager'
 import { useState } from 'react'
-import { Plus, Settings2 } from 'lucide-react'
+import { Landmark, Plus, Settings2 } from 'lucide-react'
 
 export function TransactionsTab() {
   const supabase = createClient()
   const { mutate } = useSWRConfig()
   const [addOpen, setAddOpen] = useState(false)
   const [catsOpen, setCatsOpen] = useState(false)
+  const [banksOpen, setBanksOpen] = useState(false)
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
   const [monthOffset, setMonthOffset] = useState(0)
 
@@ -35,11 +37,22 @@ export function TransactionsTab() {
     mutate('available')
   }
 
+  // A bank sync can touch any month, plus linked account balances
+  function refreshAfterSync() {
+    mutate(key => Array.isArray(key) && key[0] === 'txns')
+    mutate('cashflow')
+    mutate('available')
+    mutate('snapshots')
+  }
+
   return (
     <div className="px-4 pt-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Transactions</h1>
         <div className="flex gap-2">
+          <Button onClick={() => setBanksOpen(true)} variant="ghost" size="sm" aria-label="Linked banks">
+            <Landmark size={14} />
+          </Button>
           <Button onClick={() => setCatsOpen(true)} variant="ghost" size="sm">
             <Settings2 size={14} />
           </Button>
@@ -89,6 +102,10 @@ export function TransactionsTab() {
 
       <Modal open={catsOpen} onClose={() => setCatsOpen(false)} title="Categories">
         <CategoryManager />
+      </Modal>
+
+      <Modal open={banksOpen} onClose={() => setBanksOpen(false)} title="Linked banks">
+        <BankManager onSynced={refreshAfterSync} />
       </Modal>
     </div>
   )

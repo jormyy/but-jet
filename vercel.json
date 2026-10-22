@@ -1,6 +1,7 @@
 {
   "crons": [
     { "path": "/api/cron/snapshot", "schedule": "0 9 * * *" },
+    { "path": "/api/cron/plaid-sync", "schedule": "30 9 * * *" },
     { "path": "/api/cron/refresh-prices", "schedule": "0 21 * * *" }
   ]
 }

@@ -9,16 +9,18 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@serwist/turbopack": "9.5.12",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.3",
     "clsx": "^2.1.1",
     "lucide-react": "^1.31.0",
     "next": "16.3.1",
-    "@serwist/turbopack": "9.5.12",
-    "serwist": "9.5.12",
+    "plaid": "^49.0.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "react-plaid-link": "^5.0.0",
     "recharts": "^3.10.1",
+    "serwist": "9.5.12",
     "swr": "^2.5.1"
   },
   "devDependencies": {
