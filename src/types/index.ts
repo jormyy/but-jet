@@ -1,5 +1,5 @@
 export type Bucket = 'bills' | 'spending' | 'savings'
-export type TransactionType = 'income' | 'expense' | 'savings'
+export type TransactionType = 'income' | 'expense' | 'savings' | 'reimbursement'
 export type BillFrequency = 'monthly' | 'annual' | 'weekly'
 
 export interface Category {
@@ -28,6 +28,8 @@ export interface Transaction {
   category_id: string | null
   date: string
   is_cash: boolean
+  plaid_transaction_id: string | null
+  needs_review: boolean
   created_at: string
   category?: Category
 }

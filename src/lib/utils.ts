@@ -49,9 +49,16 @@ export function monthlyAmount(amount: number, frequency: string): number {
   return amount
 }
 
-// Income adds to checking; expenses and savings transfers both leave checking
+// Income and reimbursements add to checking; expenses and savings transfers both leave checking
 export function transactionDelta(type: TransactionType, amount: number): number {
-  return type === 'income' ? amount : -amount
+  return type === 'income' || type === 'reimbursement' ? amount : -amount
+}
+
+// A transaction's contribution to spending: reimbursements offset expenses rather than counting as income
+export function spendingAmount(t: { type: TransactionType; amount: number }): number {
+  if (t.type === 'expense') return t.amount
+  if (t.type === 'reimbursement') return -t.amount
+  return 0
 }
 
 export const BUCKET_LABELS: Record<string, string> = {

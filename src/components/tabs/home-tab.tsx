@@ -9,7 +9,7 @@ import {
   fetchAvailable,
   currentMonthKey,
 } from '@/lib/data'
-import { getMonthLabel, monthlyAmount, BUCKET_COLORS } from '@/lib/utils'
+import { getMonthLabel, monthlyAmount, spendingAmount, BUCKET_COLORS } from '@/lib/utils'
 import { DashboardClient } from '@/components/dashboard/dashboard-client'
 import { Transaction, RecurringBill, Category } from '@/types'
 
@@ -26,7 +26,7 @@ export function HomeTab() {
   const available = availableData ?? 0
 
   const incomeThisMonth = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
-  const expensesThisMonth = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
+  const expensesThisMonth = transactions.reduce((s, t) => s + spendingAmount(t), 0)
   const savingsThisMonth = transactions.filter(t => t.type === 'savings').reduce((s, t) => s + t.amount, 0)
   const committedBills = bills.filter(b => b.active).reduce((s, b) => s + monthlyAmount(b.amount, b.frequency), 0)
 
@@ -34,7 +34,7 @@ export function HomeTab() {
   const savingsRate = available === 0 ? Infinity : (savingsThisMonth / available) * 100
 
   const catMap: Record<string, { category: string; amount: number; bucket: string; color: string }> = {}
-  for (const t of transactions.filter(t => t.type === 'expense')) {
+  for (const t of transactions.filter(t => spendingAmount(t) !== 0)) {
     const cat = categories.find(c => c.id === t.category_id)
     const key = cat?.id ?? '__none__'
     if (!catMap[key]) {
@@ -45,9 +45,10 @@ export function HomeTab() {
         color: cat?.color ?? BUCKET_COLORS['spending'],
       }
     }
-    catMap[key].amount += t.amount
+    catMap[key].amount += spendingAmount(t)
   }
-  const spendingByCategory = Object.values(catMap).sort((a, b) => b.amount - a.amount)
+  // A category can net to zero or below if a reimbursement lands in a later month than the expense
+  const spendingByCategory = Object.values(catMap).filter(c => c.amount > 0).sort((a, b) => b.amount - a.amount)
 
   // The pie/bar charts do an expensive synchronous SVG layout pass on every
   // data change. Deferring their inputs lets React commit the cheap parts of

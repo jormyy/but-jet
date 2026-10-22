@@ -2,7 +2,7 @@
 
 import useSWR, { useSWRConfig } from 'swr'
 import { createClient } from '@/lib/supabase/client'
-import { fetchTransactions, monthKey } from '@/lib/data'
+import { fetchNeedsReview, fetchTransactions, monthKey } from '@/lib/data'
 import { Transaction } from '@/types'
 import { TransactionList } from '@/components/transactions/transaction-list'
 import { TransactionForm } from '@/components/transactions/transaction-form'
@@ -24,6 +24,7 @@ export function TransactionsTab() {
 
   const mk = monthKey(monthOffset)
   const { data: transactions } = useSWR(['txns', mk], ([, key]) => fetchTransactions(key as string))
+  const { data: needsReview } = useSWR('review', fetchNeedsReview)
 
   const monthLabel = (() => {
     const now = new Date()
@@ -31,10 +32,12 @@ export function TransactionsTab() {
     return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
   })()
 
+  // Flagged transactions can be from any month, so refresh every loaded month
   function refresh() {
-    mutate(['txns', mk])
+    mutate(key => Array.isArray(key) && key[0] === 'txns')
     mutate('cashflow')
     mutate('available')
+    mutate('review')
   }
 
   // A sync can touch any month, linked account balances, and synced investment holdings
@@ -44,6 +47,7 @@ export function TransactionsTab() {
     mutate('available')
     mutate('snapshots')
     mutate('investments')
+    mutate('review')
   }
 
   return (
@@ -63,6 +67,22 @@ export function TransactionsTab() {
           </Button>
         </div>
       </div>
+
+      {!!needsReview?.length && (
+        <div className="rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/60 dark:bg-amber-950/20 p-3 space-y-3">
+          <div>
+            <p className="text-sm font-medium text-amber-700 dark:text-amber-400">Needs review · {needsReview.length}</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Payments to or from people. Edit each to say what it was for, or delete ones that just moved money between your own accounts.
+            </p>
+          </div>
+          <TransactionList
+            transactions={needsReview as Transaction[]}
+            onDelete={refresh}
+            onEdit={setEditingTransaction}
+          />
+        </div>
+      )}
 
       {/* Month selector */}
       <div className="flex items-center gap-3">

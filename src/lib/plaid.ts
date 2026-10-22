@@ -50,6 +50,14 @@ function classify(t: PlaidTransaction): TransactionType | null {
 
 export type PlaidItemKind = 'bank' | 'investments'
 
+// Payments to/from people could be anything (splitting dinner, rent, paying someone back), so they're
+// imported with a best-guess type and flagged for review rather than skipped or auto-categorized.
+const PERSON_PAYMENT = /zelle|venmo|cash app|apple cash/i
+
+function isPersonPayment(t: PlaidTransaction) {
+  return PERSON_PAYMENT.test(`${t.name} ${t.merchant_name ?? ''}`)
+}
+
 interface PlaidItemRow {
   id: string
   user_id: string
@@ -118,6 +126,19 @@ async function syncItem(supabase: SupabaseClient, item: PlaidItemRow, merchantCa
   const rows = added
     .filter(t => !t.pending && t.date >= item.sync_start_date)
     .flatMap(t => {
+      if (isPersonPayment(t)) {
+        return [{
+          user_id: item.user_id,
+          plaid_transaction_id: t.transaction_id,
+          amount: Math.abs(t.amount),
+          type: (t.amount > 0 ? 'expense' : 'income') as TransactionType,
+          // The raw description says who it was with (e.g. "Zelle payment to Alex"); merchant_name is just "Zelle"
+          merchant: t.name,
+          category_id: null,
+          date: t.date,
+          needs_review: true,
+        }]
+      }
       const type = classify(t)
       if (!type) return []
       const merchant = t.merchant_name || t.name
@@ -129,6 +150,7 @@ async function syncItem(supabase: SupabaseClient, item: PlaidItemRow, merchantCa
         merchant,
         category_id: merchantCategories.get(merchant.trim().toLowerCase()) ?? null,
         date: t.date,
+        needs_review: false,
       }]
     })
   if (rows.length) {
@@ -137,11 +159,11 @@ async function syncItem(supabase: SupabaseClient, item: PlaidItemRow, merchantCa
     if (error) throw new Error(error.message)
   }
 
-  // Only refresh bank-owned fields so user edits (category, type) survive
+  // Only refresh bank-owned fields so user edits (type, category, merchant name set during review) survive
   for (const t of modified) {
     if (t.pending) continue
     const { error } = await supabase.from('transactions')
-      .update({ amount: Math.abs(t.amount), date: t.date, merchant: t.merchant_name || t.name })
+      .update({ amount: Math.abs(t.amount), date: t.date })
       .eq('plaid_transaction_id', t.transaction_id)
     if (error) throw new Error(error.message)
   }

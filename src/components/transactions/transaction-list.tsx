@@ -26,7 +26,8 @@ export function TransactionList({ transactions, onDelete, onEdit }: TransactionL
     if (!confirmTarget) return
     setDeleting(true)
     const { error } = await supabase.from('transactions').delete().eq('id', confirmTarget.id)
-    if (!error) {
+    // Synced transactions never touched the manual balances (bank balances come from Plaid), so skip them here too
+    if (!error && !confirmTarget.plaid_transaction_id) {
       await adjustAccountBalance(-transactionDelta(confirmTarget.type, confirmTarget.amount), confirmTarget.is_cash ? 'Cash' : 'Checking', mutate)
     }
     setDeleting(false)
@@ -70,6 +71,7 @@ export function TransactionList({ transactions, onDelete, onEdit }: TransactionL
                           {t.category?.name ?? 'Uncategorized'}
                           {t.description && t.merchant ? ` · ${t.description}` : ''}
                           {t.is_cash ? ' · Cash' : ''}
+                          {t.needs_review && <span className="text-amber-500"> · Needs review</span>}
                         </span>
                       </div>
                       <span
@@ -77,10 +79,11 @@ export function TransactionList({ transactions, onDelete, onEdit }: TransactionL
                           'text-sm font-semibold tabular-nums ml-3 shrink-0',
                           t.type === 'income' && 'text-emerald-600 dark:text-emerald-400',
                           t.type === 'expense' && 'text-zinc-900 dark:text-zinc-100',
-                          t.type === 'savings' && 'text-blue-600 dark:text-blue-400'
+                          t.type === 'savings' && 'text-blue-600 dark:text-blue-400',
+                          t.type === 'reimbursement' && 'text-violet-600 dark:text-violet-400'
                         )}
                       >
-                        {t.type === 'income' ? '+' : t.type === 'savings' ? '→' : '-'}
+                        {t.type === 'income' || t.type === 'reimbursement' ? '+' : t.type === 'savings' ? '→' : '-'}
                         {formatCurrency(t.amount)}
                       </span>
                     </div>

@@ -1,6 +1,6 @@
 import type { ScopedMutator } from 'swr'
 import { createClient } from '@/lib/supabase/client'
-import { getMonthRange, localDateString } from '@/lib/utils'
+import { getMonthRange, localDateString, spendingAmount } from '@/lib/utils'
 
 const supabase = () => createClient()
 
@@ -87,7 +87,7 @@ export async function fetchCashflow() {
     return {
       month: label,
       income: mt.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0),
-      expenses: mt.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0),
+      expenses: mt.reduce((s, t) => s + spendingAmount(t), 0),
       savings: mt.filter(t => t.type === 'savings').reduce((s, t) => s + t.amount, 0),
     }
   })
@@ -103,10 +103,21 @@ export async function fetchAvailable() {
     .lt('date', start)
   if (error) throw error
   return (data ?? []).reduce((s, t) => {
-    if (t.type === 'income') return s + t.amount
+    if (t.type === 'income' || t.type === 'reimbursement') return s + t.amount
     if (t.type === 'expense' || t.type === 'savings') return s - t.amount
     return s
   }, 0)
+}
+
+// Flagged transactions from any month, oldest first
+export async function fetchNeedsReview() {
+  const { data, error } = await supabase()
+    .from('transactions')
+    .select('*, category:categories(*)')
+    .eq('needs_review', true)
+    .order('date')
+  if (error) throw error
+  return data ?? []
 }
 
 export async function fetchGoals() {

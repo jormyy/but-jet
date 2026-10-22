@@ -102,8 +102,10 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
     }
 
     if (isEdit) {
-      const { error } = await supabase.from('transactions').update(payload).eq('id', transaction.id)
-      if (!error) {
+      // Saving an edit counts as reviewing it
+      const { error } = await supabase.from('transactions').update({ ...payload, needs_review: false }).eq('id', transaction.id)
+      // Synced transactions never touched the manual balances (bank balances come from Plaid), so skip them here too
+      if (!error && !transaction.plaid_transaction_id) {
         const oldAccount = transaction.is_cash ? 'Cash' : 'Checking'
         const newAccount = payload.is_cash ? 'Cash' : 'Checking'
         const oldDelta = transactionDelta(transaction.type, transaction.amount)
@@ -162,6 +164,7 @@ export function TransactionForm({ onSuccess, transaction }: TransactionFormProps
         <option value="income">Income</option>
         <option value="expense">Expense</option>
         <option value="savings">Savings</option>
+        <option value="reimbursement">Reimbursement (paid back)</option>
       </Select>
 
       <Input
