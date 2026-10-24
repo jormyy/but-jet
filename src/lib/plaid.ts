@@ -36,10 +36,13 @@ export function displayName(a: { display_name: string | null; name: string; mask
 // Plaid amounts are positive when money leaves the account. Moves between your own accounts
 // (credit card payments, checking ↔ savings) are skipped so they aren't counted as spending/income,
 // except outflows into savings/investments, which count as "savings" like a manual savings entry.
-function classify(t: PlaidTransaction): TransactionType | null {
+function classify(t: PlaidTransaction, onCreditCard: boolean): TransactionType | null {
   const primary = t.personal_finance_category?.primary ?? ''
   const detailed = t.personal_finance_category?.detailed ?? ''
   if (detailed.includes('CREDIT_CARD_PAYMENT')) return null
+  // A payment arriving on the card side isn't always tagged as one (Chase reports "Payment Thank You"
+  // as LOAN_DISBURSEMENTS), so skip those inflows; refunds keep their merchant category and still count
+  if (onCreditCard && t.amount < 0 && /^(TRANSFER_IN|LOAN_PAYMENTS|LOAN_DISBURSEMENTS)$/.test(primary)) return null
   if (t.amount > 0) {
     if (primary === 'TRANSFER_OUT') {
       if (/SAVINGS|INVESTMENT|RETIREMENT/.test(detailed)) return 'savings'
@@ -141,6 +144,7 @@ async function fetchChanges(item: PlaidItemRow) {
 
 async function syncItem(supabase: SupabaseClient, item: PlaidItemRow, merchantRules: Map<string, MerchantRule>) {
   const { added, modified, removed, accounts, cursor } = await fetchChanges(item)
+  const creditAccounts = new Set(accounts.filter(a => a.type === 'credit').map(a => a.account_id))
 
   const rows = added
     .filter(t => !t.pending && t.date >= item.sync_start_date)
@@ -150,7 +154,7 @@ async function syncItem(supabase: SupabaseClient, item: PlaidItemRow, merchantRu
       // merchant_name would just be "Zelle"
       const bankMerchant = person ? t.name : (t.merchant_name || t.name)
       const rule = merchantRules.get(bankMerchant.trim().toLowerCase())
-      const type: TransactionType | null = person ? (t.amount > 0 ? 'expense' : 'income') : classify(t)
+      const type: TransactionType | null = person ? (t.amount > 0 ? 'expense' : 'income') : classify(t, creditAccounts.has(t.account_id))
       if (!type) return []
       return [{
         user_id: item.user_id,
